@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-title" content="PolyScanner">
   <meta name="theme-color" content="#020617">
   <title>Polymarket Wallet Scanner - Lifetime P&L & Win % Ranker</title>
-  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     /* Custom scrollbars */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -987,8 +987,12 @@
     // App Mode Switching
     const modeBtnSingle = document.getElementById('modeBtnSingle');
     const modeBtnWhales = document.getElementById('modeBtnWhales');
+    const modeBtnSaved = document.getElementById('modeBtnSaved');
+    const modeBtnConsensus = document.getElementById('modeBtnConsensus');
     const singleMarketSection = document.getElementById('singleMarketSection');
     const whaleScannerSection = document.getElementById('whaleScannerSection');
+    const savedWalletsSection = document.getElementById('savedWalletsSection');
+    const consensusSection = document.getElementById('consensusSection');
     let currentAppMode = 'single';
 
     // Global State (Single Market)
@@ -2476,8 +2480,6 @@
     // SECTION 3: PREVIOUSLY SCANNED WALLETS MODULE
     // ==========================================
     const STORAGE_KEY_SAVED_WALLETS = 'polymarket_saved_wallets_v2';
-    const modeBtnSaved = document.getElementById('modeBtnSaved');
-    const savedWalletsSection = document.getElementById('savedWalletsSection');
     const savedWalletsCountBadge = document.getElementById('savedWalletsCountBadge');
 
     // Saved Wallets KPI DOM
@@ -3010,8 +3012,6 @@
     // ==========================================
     // SECTION 4: SMART MONEY CONSENSUS SIGNALS MODULE
     // ==========================================
-    const modeBtnConsensus = document.getElementById('modeBtnConsensus');
-    const consensusSection = document.getElementById('consensusSection');
     const consensusSignalCountBadge = document.getElementById('consensusSignalCountBadge');
 
     // Controls
