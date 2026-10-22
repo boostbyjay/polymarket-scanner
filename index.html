@@ -1188,6 +1188,64 @@
 
   </div>
   <!-- /max-w-6xl -->
+
+  <!-- Share Dossier Modal -->
+  <div id="shareDossierModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-violet-500/20 text-violet-300 font-bold text-base">🔗</span>
+          <div>
+            <h3 class="text-sm font-bold text-white">Share Match Intel Dossier</h3>
+            <p class="text-[11px] text-slate-400">Share this sharp betting analysis and quant breakdown</p>
+          </div>
+        </div>
+        <button id="closeShareModalBtn" type="button" class="text-slate-400 hover:text-white text-base p-1 cursor-pointer">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">Direct Dossier URL</label>
+          <div class="flex items-center gap-2">
+            <input 
+              type="text" 
+              id="shareUrlInput" 
+              readonly 
+              class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 font-mono outline-none focus:border-violet-500 select-all"
+            />
+            <button id="copyShareUrlBtn" type="button" class="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap">
+              Copy Link
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">Social Summary (Formatted for X / Telegram / Discord)</label>
+          <textarea 
+            id="shareTextInput" 
+            readonly 
+            rows="4" 
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 font-mono outline-none select-all"
+          ></textarea>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+          <button id="copyShareTextBtn" type="button" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5">
+            <span>📋 Copy Post Text</span>
+          </button>
+          <div class="flex items-center gap-2">
+            <a id="shareTwitterBtn" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-2 bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+              <span>Post to X ↗</span>
+            </a>
+            <a id="shareTelegramBtn" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-2 bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-cyan-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+              <span>Telegram ↗</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="inspectorModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -4281,6 +4339,16 @@
     const intelClearAllArchivesBtn = document.getElementById('intelClearAllArchivesBtn');
     const intelSavedCountBadge = document.getElementById('intelSavedCountBadge');
 
+    // Share Dossier Modal Elements
+    const shareDossierModal = document.getElementById('shareDossierModal');
+    const closeShareModalBtn = document.getElementById('closeShareModalBtn');
+    const shareUrlInput = document.getElementById('shareUrlInput');
+    const copyShareUrlBtn = document.getElementById('copyShareUrlBtn');
+    const shareTextInput = document.getElementById('shareTextInput');
+    const copyShareTextBtn = document.getElementById('copyShareTextBtn');
+    const shareTwitterBtn = document.getElementById('shareTwitterBtn');
+    const shareTelegramBtn = document.getElementById('shareTelegramBtn');
+
     let isIntelRunning = false;
     let currentActiveIntel = null;
     const SAVED_INTEL_STORAGE_KEY = 'polymarket_saved_intel';
@@ -5123,8 +5191,11 @@
             </div>
 
             <div class="flex items-center gap-2 flex-wrap">
-              <button id="intelSaveDossierBtn" type="button" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+              <button id="intelSaveDossierBtn" type="button" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                 <span>💾 Save Match Intel</span>
+              </button>
+              <button id="intelShareDossierBtn" type="button" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-md shadow-slate-950/40">
+                <span>🔗 Share Link</span>
               </button>
               <a href="${intelMatchUrl.value || 'https://polymarket.com'}" target="_blank" rel="noopener noreferrer" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs shadow-lg shadow-violet-600/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                 <span>Trade on Polymarket ↗</span>
@@ -5553,6 +5624,9 @@
                 <button id="intelSaveDossierBottomBtn" type="button" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                   <span>💾 Save Intel</span>
                 </button>
+                <button id="intelShareDossierBottomBtn" type="button" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                  <span>🔗 Share Link</span>
+                </button>
                 <a href="${intelMatchUrl.value || 'https://polymarket.com'}" target="_blank" rel="noopener noreferrer" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs text-center transition cursor-pointer whitespace-nowrap">
                   Place Smart Bet on Polymarket ↗
                 </a>
@@ -5604,6 +5678,12 @@
           syncSaveButtons(true);
         });
       }
+
+      // Bind Share Dossier buttons
+      const shareBtn = document.getElementById('intelShareDossierBtn');
+      const shareBottomBtn = document.getElementById('intelShareDossierBottomBtn');
+      if (shareBtn) shareBtn.addEventListener('click', openShareDossierModal);
+      if (shareBottomBtn) shareBottomBtn.addEventListener('click', openShareDossierModal);
     }
 
     async function runMatchAudit() {
@@ -5724,6 +5804,225 @@
     if (intelRunBtn) {
       intelRunBtn.addEventListener('click', runMatchAudit);
     }
+
+    // ==========================================
+    // SHARE DOSSIER MODAL & DEEP LINK LOGIC
+    // ==========================================
+    function getShareableUrl(poly) {
+      let baseUrl = "https://boostbyjay.github.io/polymarket-scanner/";
+      try {
+        const origin = window.location.origin;
+        const pathname = window.location.pathname;
+        if (origin && origin !== "null" && origin !== "file://" && !origin.startsWith("file:")) {
+          baseUrl = `${origin}${pathname}`;
+        }
+      } catch (e) {}
+
+      let slug = "nfl-ne-chi-2026-10-23";
+      const inputVal = intelMatchUrl ? intelMatchUrl.value.trim() : '';
+      if (inputVal) {
+        const extracted = inputVal.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").split(/[?#]/)[0];
+        if (extracted) slug = extracted;
+      } else if (poly && poly.title) {
+        slug = poly.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      }
+
+      const cleanBase = baseUrl.split(/[?#]/)[0];
+      return `${cleanBase}?tab=intel&match=${encodeURIComponent(slug)}`;
+    }
+
+    function generateShareText(poly, grok, shareUrl) {
+      const title = poly?.title || "Match Intel Dossier";
+      const league = poly?.league || "NFL";
+      const vol = poly?.volume || "$870,412.00";
+      const primary = poly?.directBets?.primary?.team 
+        ? `${poly.directBets.primary.team} ${poly.directBets.primary.sub || ''}`
+        : "Bears -3.0";
+      const total = poly?.directBets?.total?.team
+        ? `${poly.directBets.total.team} ${poly.directBets.total.sub || ''}`
+        : "Over 50.5";
+      const trap = poly?.directBets?.trap?.team
+        ? `${poly.directBets.trap.team} ${poly.directBets.trap.sub || ''}`
+        : "Patriots +3.0 Spread";
+
+      return `🧠 QUANT DOSSIER: ${title} (${league})
+💰 Polymarket Volume: ${vol}
+
+🎯 High-Conviction Core Bet: ${primary}
+📊 Total O/U Target: ${total}
+⚠️ Retail Trap To Avoid: Fade ${trap}
+
+⚡ Sharp Divergence: Retail is chasing underdog trends (75% tickets), while sharp whales & Polymarket capital are backing the favorite.
+
+Full Match Intel & Quant Breakdown 📊
+${shareUrl}`;
+    }
+
+    function openShareDossierModal() {
+      if (!currentActiveIntel || !currentActiveIntel.poly) {
+        loadTnfDemo();
+      }
+
+      const poly = currentActiveIntel ? currentActiveIntel.poly : getTnfDemoData();
+      const grok = currentActiveIntel ? currentActiveIntel.grok : parseGrokReport(demoGrokReport);
+      const shareUrl = getShareableUrl(poly);
+      const shareText = generateShareText(poly, grok, shareUrl);
+
+      if (shareUrlInput) shareUrlInput.value = shareUrl;
+      if (shareTextInput) shareTextInput.value = shareText;
+
+      // Automatically copy direct share link to clipboard for ultra-fast sharing
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          const shareBtn = document.getElementById('intelShareDossierBtn');
+          const shareBottomBtn = document.getElementById('intelShareDossierBottomBtn');
+          if (shareBtn) {
+            shareBtn.innerHTML = `<span>✓ Copied Link!</span>`;
+            shareBtn.className = "px-3.5 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-lg shadow-violet-600/30 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap";
+            setTimeout(() => {
+              shareBtn.innerHTML = `<span>🔗 Share Link</span>`;
+              shareBtn.className = "px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-md shadow-slate-950/40";
+            }, 2500);
+          }
+          if (shareBottomBtn) {
+            shareBottomBtn.innerHTML = `<span>✓ Copied Link!</span>`;
+            shareBottomBtn.className = "px-3.5 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-lg shadow-violet-600/30 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap";
+            setTimeout(() => {
+              shareBottomBtn.innerHTML = `<span>🔗 Share Link</span>`;
+              shareBottomBtn.className = "px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap";
+            }, 2500);
+          }
+        }).catch(err => {
+          console.warn("Clipboard auto-copy failed:", err);
+        });
+      }
+
+      // Configure social sharing links
+      if (shareTwitterBtn) {
+        shareTwitterBtn.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+      }
+      if (shareTelegramBtn) {
+        shareTelegramBtn.href = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(`🏈 ${poly.title || 'Match Intel Dossier'} Sharp Breakdown:`)}`;
+      }
+
+      if (shareDossierModal) {
+        shareDossierModal.classList.remove('hidden');
+      }
+    }
+
+    if (copyShareUrlBtn && shareUrlInput) {
+      copyShareUrlBtn.addEventListener('click', () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareUrlInput.value).then(() => {
+            const original = copyShareUrlBtn.innerHTML;
+            copyShareUrlBtn.innerHTML = "✓ Copied!";
+            copyShareUrlBtn.classList.add("bg-emerald-600");
+            copyShareUrlBtn.classList.remove("bg-violet-600");
+            setTimeout(() => {
+              copyShareUrlBtn.innerHTML = original;
+              copyShareUrlBtn.classList.remove("bg-emerald-600");
+              copyShareUrlBtn.classList.add("bg-violet-600");
+            }, 2000);
+          });
+        } else {
+          shareUrlInput.select();
+          document.execCommand('copy');
+        }
+      });
+    }
+
+    if (copyShareTextBtn && shareTextInput) {
+      copyShareTextBtn.addEventListener('click', () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareTextInput.value).then(() => {
+            const original = copyShareTextBtn.innerHTML;
+            copyShareTextBtn.innerHTML = "<span>✓ Copied Text!</span>";
+            copyShareTextBtn.classList.add("text-emerald-300", "border-emerald-500/40");
+            setTimeout(() => {
+              copyShareTextBtn.innerHTML = original;
+              copyShareTextBtn.classList.remove("text-emerald-300", "border-emerald-500/40");
+            }, 2000);
+          });
+        } else {
+          shareTextInput.select();
+          document.execCommand('copy');
+        }
+      });
+    }
+
+    if (closeShareModalBtn && shareDossierModal) {
+      closeShareModalBtn.addEventListener('click', () => {
+        shareDossierModal.classList.add('hidden');
+      });
+    }
+
+    if (shareDossierModal) {
+      shareDossierModal.addEventListener('click', (e) => {
+        if (e.target === shareDossierModal) {
+          shareDossierModal.classList.add('hidden');
+        }
+      });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (shareDossierModal && !shareDossierModal.classList.contains('hidden')) {
+          shareDossierModal.classList.add('hidden');
+        }
+      }
+    });
+
+    // Handle deep linking from URL search query (?tab=intel&match=...)
+    function handleInitialUrlParams() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tab = urlParams.get('tab');
+        const match = urlParams.get('match');
+
+        if (tab === 'intel' || match) {
+          switchAppMode('intel');
+
+          if (match) {
+            const mNorm = match.toLowerCase();
+            if (mNorm.includes('bears') || mNorm.includes('ne-chi') || mNorm.includes('2026-10-23') || mNorm.includes('patriots')) {
+              loadTnfDemo();
+            } else {
+              const list = getSavedIntelList();
+              const saved = list.find(item => {
+                const titleNorm = (item.matchTitle || '').toLowerCase();
+                const urlNorm = (item.matchUrl || '').toLowerCase();
+                const idNorm = (item.id || '').toLowerCase();
+                return titleNorm.includes(mNorm) || urlNorm.includes(mNorm) || idNorm.includes(mNorm);
+              });
+
+              if (saved) {
+                if (intelMatchUrl) intelMatchUrl.value = saved.matchUrl || saved.matchTitle;
+                if (intelRawGrokInput && saved.grokData) intelRawGrokInput.value = saved.grokData.raw || '';
+                renderIntelDashboard(saved.polyData, saved.grokData);
+              } else {
+                if (intelMatchUrl) {
+                  intelMatchUrl.value = match.startsWith('http') 
+                    ? match 
+                    : `https://polymarket.com/sports/nfl/${match}`;
+                }
+                loadTnfDemo();
+              }
+            }
+
+            if (intelResultsArea) {
+              setTimeout(() => {
+                intelResultsArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 150);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("handleInitialUrlParams error:", err);
+      }
+    }
+
+    // Initialize deep linking check on boot
+    handleInitialUrlParams();
   </script>
 </body>
 </html>
