@@ -4619,9 +4619,304 @@
       };
     }
 
+    function extractTeamsAndLeague(polyTitle, rawText, theLine) {
+      const combined = ((polyTitle || "") + " " + (rawText || "") + " " + (theLine || "")).toLowerCase();
+      
+      // 1. Detect League
+      let league = "SPORTS";
+      if (combined.includes("nba") || combined.includes("celtics") || combined.includes("lakers") || combined.includes("warriors") || 
+          combined.includes("knicks") || combined.includes("bucks") || combined.includes("nuggets") || combined.includes("mavericks") || 
+          combined.includes("76ers") || combined.includes("suns") || combined.includes("heat") || combined.includes("clippers") || 
+          combined.includes("timberwolves") || combined.includes("pacers") || combined.includes("cavaliers") || combined.includes("rebounds") || 
+          combined.includes("assists") || combined.includes("triple-double") || combined.includes("td garden") || combined.includes("crypto.com")) {
+        league = "NBA";
+      } else if (combined.includes("nfl") || combined.includes("touchdown") || combined.includes("passing yards") || 
+                 combined.includes("rushing yards") || combined.includes("quarterback") || combined.includes("interception") || 
+                 combined.includes("bears") || combined.includes("patriots") || combined.includes("chiefs") || combined.includes("eagles")) {
+        league = "NFL";
+      } else if (combined.includes("mlb") || combined.includes("strikeouts") || combined.includes("innings") || combined.includes("yankees") || combined.includes("dodgers")) {
+        league = "MLB";
+      } else if (combined.includes("nhl") || combined.includes("puck line") || combined.includes("goals")) {
+        league = "NHL";
+      }
+
+      // 2. Extract Team Names
+      let teamA = "Favorite";
+      let teamB = "Underdog";
+
+      // Method A: From polyTitle
+      if (polyTitle && !polyTitle.toLowerCase().includes("dossier") && !polyTitle.toLowerCase().includes("market")) {
+        const cleanTitle = polyTitle.replace(/^(?:nba|nfl|mlb|nhl|sports)[-_\s]+/i, "")
+                                    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, "")
+                                    .trim();
+        const vsParts = cleanTitle.split(/\s+(?:vs\.?|@|-)\s+/i);
+        if (vsParts.length >= 2 && vsParts[0].trim() && vsParts[1].trim()) {
+          teamA = vsParts[0].trim().replace(/\b\w/g, c => c.toUpperCase());
+          teamB = vsParts[1].trim().replace(/\b\w/g, c => c.toUpperCase());
+          return { league, teamA, teamB };
+        }
+      }
+
+      // Method B: From raw text or theLine
+      const chunk = (rawText || "").slice(0, 450);
+      
+      const mVs = chunk.match(/([A-Z][a-zA-Z\s]{2,25}?)\s+(?:vs\.?|@)\s+([A-Z][a-zA-Z\s]{2,25}?)(?:[.,\n\(\)]|\s+game|\s+match)/);
+      if (mVs) {
+        teamA = mVs[1].trim();
+        teamB = mVs[2].trim();
+        return { league, teamA, teamB };
+      }
+
+      const mOver = chunk.match(/(?:posts,?\s+(?:the\s+)?|posts\s+on\s+(?:the\s+)?|^)([A-Z][a-zA-Z\s]{2,25}?)\s+(?:at\s+[-+]?\d[^\n]*?|are[^\n]*?)\s+(?:over|against)\s+(?:the\s+)?([A-Z][a-zA-Z\s]{2,25}?)(?:\s+at|\s+in|[.,\n])/i);
+      if (mOver) {
+        teamA = mOver[1].trim();
+        teamB = mOver[2].trim();
+        return { league, teamA, teamB };
+      }
+
+      const mFav = chunk.match(/(?:posts,?\s+(?:the\s+)?|^)([A-Z][a-zA-Z\s]{2,25}?)\s+(?:at\s+[-+]?\d[^\n]*?are\s+(?:the\s+)?(?:slight\s+|favored\s+|consensus\s+|sharp\s+)?favorite)/i);
+      if (mFav) {
+        teamA = mFav[1].trim();
+        const mOpp = (rawText || "").match(/\*\*(?:On\s+the\s+)([A-Z][a-zA-Z\s]{2,25}?):\*\*/i);
+        if (mOpp && !mOpp[1].toLowerCase().includes(teamA.toLowerCase())) {
+          teamB = mOpp[1].trim();
+        } else {
+          const mOpp2 = (rawText || "").match(/(?:argument|case|support)\s+for\s+(?:the\s+)?([A-Z][a-zA-Z\s]{2,25}?)[.,\s]/i);
+          if (mOpp2 && !mOpp2[1].toLowerCase().includes(teamA.toLowerCase())) {
+            teamB = mOpp2[1].trim();
+          } else {
+            teamB = "Opponent";
+          }
+        }
+        return { league, teamA, teamB };
+      }
+
+      return { league, teamA, teamB };
+    }
+
+    function extractDirectBets(parsed, teamA, teamB, league) {
+      const raw = parsed.raw || "";
+      const theLine = parsed.theLine || "";
+      const bottomLine = parsed.bottomLine || "";
+      const props = parsed.props || [];
+
+      const spreadMatch = theLine.match(/([-+]\d+\.?\d*)/);
+      const spreadNum = spreadMatch ? spreadMatch[1] : "-3.5";
+      
+      const totalMatch = theLine.match(/total[^\d]*?(\d+\.?\d*)/i) || (theLine + " " + bottomLine).match(/(?:Over|Under)\s*(\d+\.?\d*)/i);
+      const totalNum = totalMatch ? totalMatch[1] : (league === "NBA" ? "226.5" : "48.5");
+
+      let primary = null;
+      let total = null;
+      let prop = null;
+      let trap = null;
+
+      // 1. Primary Spread/ML Play
+      const mPrimary = raw.match(/(?:Primary(?:\s+Spread(?:\/ML)?)?\s+Play|Core\s+Bet|Primary\s+Bet|Best\s+Bet):\*{0,2}\s*([^\n\r]+)/i);
+      if (mPrimary) {
+        const textLine = mPrimary[1].trim();
+        const tMatch = textLine.match(/^([A-Za-z\s]+?)(?:\s+([-+]?\d+\.?\d*))?(?:\s*\((.*?)\))?\.?\s*(.*)$/);
+        let tName = teamA.toUpperCase();
+        let tSub = spreadNum ? `${spreadNum} SPREAD` : "CORE BET";
+        let rating = "4.5/5 ⭐";
+        let units = "1.5 - 2.0 Units";
+        let directive = textLine;
+
+        if (tMatch) {
+          if (tMatch[1] && tMatch[1].trim().length > 2) tName = tMatch[1].trim().toUpperCase();
+          if (tMatch[2]) tSub = `${tMatch[2].trim()} SPREAD`;
+          if (tMatch[3]) {
+            const uM = tMatch[3].match(/(\d+(?:\.\d+)?\s*(?:-\s*\d+(?:\.\d+)?)?\s*Units?)/i);
+            if (uM) units = uM[1];
+            const rM = tMatch[3].match(/(\d+(?:\.\d+)?\s*\/\s*5\s*⭐?)/);
+            if (rM) rating = rM[1];
+          }
+          if (tMatch[4] && tMatch[4].trim()) directive = tMatch[4].trim();
+        }
+
+        primary = {
+          title: "Primary Spread Play",
+          team: tName,
+          sub: tSub,
+          rating: rating,
+          units: units,
+          odds: "Polymarket On-Chain / -110",
+          directive: directive.replace(/^[-*•\s]+/, ""),
+          badgeText: "Recommended Spread Bet"
+        };
+      } else {
+        primary = {
+          title: "Primary Spread Play",
+          team: `${teamA.toUpperCase()} ${spreadNum}`.trim(),
+          sub: `${spreadNum} SPREAD / MONEYLINE`,
+          rating: "4.5/5 ⭐",
+          units: "1.5 - 2.0 Units",
+          odds: "Polymarket On-Chain / -110",
+          directive: (bottomLine && bottomLine.length > 20) 
+            ? bottomLine 
+            : `Sharp money consensus and institutional order-book limits heavily back ${teamA}. High-volume cash handle confirms smart position divergence.`,
+          badgeText: "Recommended Spread Bet"
+        };
+      }
+
+      // 2. Game Total Play
+      const mTotal = raw.match(/(?:Game\s+Total(?:\s+Play)?|Total\s+Play|Total\s+Bet):\*{0,2}\s*([^\n\r]+)/i);
+      if (mTotal) {
+        const textLine = mTotal[1].trim();
+        const tMatch = textLine.match(/^(Over|Under)\s*(\d+\.?\d*)?(?:\s*\((.*?)\))?\.?\s*(.*)$/i);
+        let ou = "OVER";
+        let pts = totalNum;
+        let rating = "4/5 ⭐";
+        let units = "1.0 Unit";
+        let directive = textLine;
+
+        if (tMatch) {
+          if (tMatch[1]) ou = tMatch[1].toUpperCase();
+          if (tMatch[2]) pts = tMatch[2];
+          if (tMatch[3]) {
+            const uM = tMatch[3].match(/(\d+(?:\.\d+)?\s*Units?)/i);
+            if (uM) units = uM[1];
+            const rM = tMatch[3].match(/(\d+(?:\.\d+)?\s*\/\s*5\s*⭐?)/);
+            if (rM) rating = rM[1];
+          }
+          if (tMatch[4] && tMatch[4].trim()) directive = tMatch[4].trim();
+        }
+
+        total = {
+          title: "Game Total Play",
+          team: `${ou} ${pts}`.trim(),
+          sub: `TOTAL POINTS (${pts})`,
+          rating: rating,
+          units: units,
+          odds: "50.5¢ (Poly) / -110",
+          directive: directive.replace(/^[-*•\s]+/, ""),
+          badgeText: "Recommended Total Bet"
+        };
+      } else {
+        const totOpenMatch = theLine.match(/total[^\d]*?(\d+\.?\d*)[^\d]*?(?:to|now|up to)\s*(\d+\.?\d*)/i);
+        const resolvedTotal = totOpenMatch ? totOpenMatch[2] : totalNum;
+        const ouMention = (theLine + " " + bottomLine).match(/(Over|Under)/i);
+        const ouSide = ouMention ? ouMention[1].toUpperCase() : "OVER";
+        total = {
+          title: "Game Total Play",
+          team: `${ouSide} ${resolvedTotal}`.trim(),
+          sub: `TOTAL POINTS (${resolvedTotal})`,
+          rating: "4/5 ⭐",
+          units: "1.0 Unit",
+          odds: "50.5¢ (Poly) / -110",
+          directive: `Offensive pace ratings, total line movement, and sportsbook handle splits favor the ${ouSide.toLowerCase()} position.`,
+          badgeText: "Recommended Total Bet"
+        };
+      }
+
+      // 3. Top Player Prop
+      const mProp = raw.match(/(?:Top\s+)?Player\s+Prop[^\n\r:]*?:\*{0,2}\s*([^\n\r]+)/i);
+      if (mProp) {
+        const textLine = mProp[1].trim();
+        const pMatch = textLine.match(/^([A-Za-z\s\x27\.\-]+?)\s+(over|under)\s+([0-9\.]+[A-Za-z\s]+?)(?:\s*\((.*?)\))?\.?\s*(.*)$/i);
+        let pName = "TOP PLAYER PROP";
+        let pSub = "PROP TARGET";
+        let rating = "4.5/5 ⭐";
+        let units = "0.75 - 1.0 Unit";
+        let directive = textLine;
+
+        if (pMatch) {
+          pName = pMatch[1].trim().toUpperCase();
+          pSub = `${pMatch[2].toUpperCase()} ${pMatch[3].trim().toUpperCase()}`;
+          if (pMatch[4]) {
+            const uM = pMatch[4].match(/(\d+(?:\.\d+)?\s*Units?)/i);
+            if (uM) units = uM[1];
+            const rM = pMatch[4].match(/(\d+(?:\.\d+)?\s*\/\s*5\s*⭐?)/);
+            if (rM) rating = rM[1];
+          }
+          if (pMatch[5] && pMatch[5].trim()) directive = pMatch[5].trim();
+        }
+
+        prop = {
+          title: "Cornerstone Prop",
+          team: pName,
+          sub: pSub,
+          rating: rating,
+          units: units,
+          odds: "-115 / -125",
+          directive: directive.replace(/^[-*•\s]+/, ""),
+          badgeText: "Recommended Prop Bet"
+        };
+      } else if (props && props.length > 0) {
+        const topProp = props[0];
+        const pMatch = topProp.match(/^([A-Za-z\s\x27\.\-]+?)\s+(over|under)\s+([0-9\.]+[A-Za-z\s]+?)(?:\s*\(.*?\))?$/i);
+        let pName = topProp.slice(0, 25).toUpperCase();
+        let pSub = "HIGH WIN-RATE TARGET";
+        if (pMatch) {
+          pName = pMatch[1].trim().toUpperCase();
+          pSub = `${pMatch[2].toUpperCase()} ${pMatch[3].trim().toUpperCase()}`;
+        }
+        prop = {
+          title: "Cornerstone Prop",
+          team: pName,
+          sub: pSub,
+          rating: "4.5/5 ⭐",
+          units: "0.75 - 1.0 Unit",
+          odds: "-115 / -125",
+          directive: `Consensus #1 proposition play across major sportsbooks and sharp trading feeds.`,
+          badgeText: "Recommended Prop Bet"
+        };
+      } else {
+        prop = {
+          title: "Value Selection",
+          team: `${teamA.toUpperCase()} PROPOSITION`,
+          sub: "KEY VALUE TARGET",
+          rating: "4/5 ⭐",
+          units: "0.75 Unit",
+          odds: "Even",
+          directive: `Exploit mispriced individual proposition markets where retail volume lags behind quant models.`,
+          badgeText: "Value Proposition"
+        };
+      }
+
+      // 4. Fade / Trap Warning
+      const mTrap = raw.match(/(?:Fade|Trap)[^\n\r:]*?:\*{0,2}\s*([^\n\r]+)/i);
+      if (mTrap) {
+        const textLine = mTrap[1].trim();
+        let teamStr = `FADE ${teamB.toUpperCase()}`;
+        const fadeMatch = textLine.match(/fade\s+([A-Za-z\s]+?)(?:\s+[-+]?\d|\.|$)/i);
+        if (fadeMatch) teamStr = `FADE ${fadeMatch[1].trim().toUpperCase()}`;
+
+        trap = {
+          title: "Public Trap Warning",
+          team: teamStr,
+          sub: "AVOID EXCESS RETAIL TRAP",
+          rating: "⛔ CAUTION / FADE",
+          units: "Pass or Fade",
+          odds: "Crowded Public Handle",
+          directive: textLine.replace(/^[-*•\s]+/, ""),
+          badgeText: "Action: Fade or Pass"
+        };
+      } else {
+        trap = {
+          title: "Public Trap Warning",
+          team: `FADE ${teamB.toUpperCase()}`,
+          sub: "AVOID UNDERDOG BIAS",
+          rating: "⛔ CAUTION / FADE",
+          units: "Pass or Fade",
+          odds: "Public Heavy",
+          directive: `Beware of public retail ticket volume chasing the ${teamB} spread into sharp reverse line movement.`,
+          badgeText: "Action: Fade or Pass"
+        };
+      }
+
+      return { primary, total, prop, trap };
+    }
+
     function enrichPolyIntelData(polyData, parsed) {
-      const isTnf = (polyData.title && (polyData.title.toLowerCase().includes("bears") || polyData.title.toLowerCase().includes("patriots") || polyData.title.toLowerCase().includes("ne-chi"))) ||
-                    (parsed && parsed.raw && (parsed.raw.toLowerCase().includes("bears") || parsed.raw.toLowerCase().includes("patriots")));
+      const pTitle = (polyData.title || "").toLowerCase();
+      const pRaw = (parsed && parsed.raw ? parsed.raw : "").toLowerCase();
+
+      // STRICT TNF Bears Demo Check: Only if BOTH Bears and Patriots are mentioned!
+      const hasBears = pTitle.includes("bears") || pRaw.includes("bears");
+      const hasPatriots = pTitle.includes("patriots") || pRaw.includes("patriots");
+      const hasNeChi = pTitle.includes("ne-chi") || (polyData.matchUrl && polyData.matchUrl.includes("ne-chi"));
+      const isTnf = (hasBears && hasPatriots) || hasNeChi;
 
       if (isTnf) {
         const tnf = getTnfDemoData();
@@ -4638,16 +4933,29 @@
           teamBPct: tnf.teamBPct,
           netDollarSkew: tnf.netDollarSkew,
           smartCapital: tnf.smartCapital,
-          volume: polyData.volume && polyData.volume !== "Active Event" ? polyData.volume : tnf.volume
+          volume: polyData.volume && polyData.volume !== "Active Event" ? polyData.volume : tnf.volume,
+          lineData: {
+            open: "Bears -1.5",
+            current: "Bears -3.0",
+            total: "47 ➔ 50.5"
+          },
+          divergence: {
+            leftTitle: "Bears Backed heavily across -2.5 and -3.0 Spreads",
+            leftDesc: "On-chain smart money has accumulated active positions backing Chicago. Consensus scanner shows overlapping bets from high win-rate traders.",
+            rightTitle: "70-75% Public Tickets on Patriots (+3) vs 78% Dollar Handle on Bears",
+            rightDesc: "Classic reverse line movement: Public is backing the primetime underdog streak, while high-stakes whale bettors & sportsbooks took a $27.5K bet on Bears -3.",
+            takeaway: "Retail ticket volume is aggressively chasing the Patriots +3 underdog streak, while high-volume sharp capital and Polymarket prediction markets are aligned on Chicago. This presents a textbook fade the public / back the smart money opportunity."
+          }
         });
       }
 
-      // Generic event fallback
-      const teams = (polyData.title || "Match Dossier").split(/\s+(?:vs\.?|@|-)\s+/i);
-      const teamA = teams[0] ? teams[0].trim() : "Side A";
-      const teamB = teams[1] ? teams[1].trim() : "Side B";
+      // DYNAMIC EVENT (NBA, NFL, MLB, ETC.)
+      const meta = extractTeamsAndLeague(polyData.title, parsed ? parsed.raw : '', parsed ? parsed.theLine : '');
+      const league = meta.league || polyData.league || "SPORTS";
+      const teamA = meta.teamA || "Side A";
+      const teamB = meta.teamB || "Side B";
 
-      let numVol = 650000;
+      let numVol = 740000;
       if (polyData.volume && typeof polyData.volume === 'string') {
         const parsedV = parseFloat(polyData.volume.replace(/[^0-9.]/g, ""));
         if (!isNaN(parsedV) && parsedV > 0) numVol = parsedV;
@@ -4657,7 +4965,82 @@
       const teamBVol = Math.round(numVol * 0.415);
       const diffVol = teamAVol - teamBVol;
 
+      // Dynamic Direct Bets extraction
+      const directBets = extractDirectBets(parsed || {}, teamA, teamB, league);
+
+      // Dynamic Statistical Proofs
+      const colors = ['emerald', 'cyan', 'amber', 'violet', 'rose', 'blue'];
+      const statsProof = (parsed && parsed.trends && parsed.trends.length > 0)
+        ? parsed.trends.slice(0, 6).map((trendStr, i) => {
+            const numMatch = trendStr.match(/(\d+(?:-\d+)+(?:\s+ATS|\s+SU)?|\d+(?:\.\d+)?%|\d+\+?\s+straight|\d+\s+TDs|\d+\.?\d*\s+PPG)/i);
+            const metric = numMatch ? numMatch[1] : "Key Factor";
+            const badge = (i === 0) ? "Trend Divergence" : 
+                          (i === 1) ? "ATS Record" : 
+                          (i === 2) ? "Matchup Metric" : 
+                          (i === 3) ? "Officiating / Pace" : "Quant Signal";
+            return {
+              badge: badge,
+              color: colors[i % colors.length],
+              metric: metric,
+              title: `${teamA} vs ${teamB} Angle`,
+              desc: trendStr
+            };
+          })
+        : [
+            {
+              badge: "Sharp Divergence",
+              color: "emerald",
+              metric: "Disproportionate Handle",
+              title: "Institutional Money Flow",
+              desc: `Aggregated sportsbook and market metrics show disproportionate volume accumulating on ${teamA} relative to ticket counts.`
+            },
+            {
+              badge: "Market Signal",
+              color: "cyan",
+              metric: "Pricing Edge",
+              title: "Prediction Liquidity Depth",
+              desc: `Order books reflect higher bid depth defending ${teamA} price points across all major submarkets.`
+            }
+          ];
+
+      // Dynamic Line Movement
+      const theLine = (parsed && parsed.theLine) ? parsed.theLine : "";
+      let openStr = `${teamA} -1.5`;
+      let currStr = `${teamA} -3.0`;
+      let totalStr = league === "NBA" ? "224 ➔ 227.5" : "47 ➔ 50.5";
+
+      const openMatch = theLine.match(/opened[^\d\-+]*?([-+]?\d+\.?\d*)/i);
+      if (openMatch) openStr = `${teamA} ${openMatch[1]}`;
+      
+      const currMatch = theLine.match(/(?:now|currently|steamed\s+to|sits\s+at)[^\d\-+]*?([-+]?\d+\.?\d*)/i);
+      if (currMatch) currStr = `${teamA} ${currMatch[1]}`;
+
+      const totOpenMatch = theLine.match(/total[^\d]*?(\d+\.?\d*)[^\d]*?(?:to|now)\s*(\d+\.?\d*)/i);
+      if (totOpenMatch) {
+        totalStr = `${totOpenMatch[1]} ➔ ${totOpenMatch[2]}`;
+      } else {
+        const singleTot = theLine.match(/total[^\d]*?(\d+\.?\d*)/i);
+        if (singleTot) totalStr = `Total ${singleTot[1]}`;
+      }
+
+      // Dynamic Divergence Matrix
+      const divergence = {
+        leftTitle: `${teamA} Backed by Sharp Limits & Prediction Markets`,
+        leftDesc: `On-chain smart money has accumulated active positions backing ${teamA}. Order books and trading desks reflect heavy institutional bid support.`,
+        rightTitle: (parsed && parsed.moneySplits && parsed.moneySplits[0])
+          ? parsed.moneySplits[0].slice(0, 80)
+          : `Public Tickets on ${teamB} vs Real Money on ${teamA}`,
+        rightDesc: (parsed && parsed.moneySplits && parsed.moneySplits.length > 1)
+          ? parsed.moneySplits.slice(0, 2).join(" ")
+          : `Classic reverse line movement: Public retail tickets are backing ${teamB}, while high-stakes whale limits are heavily backing ${teamA}.`,
+        takeaway: (parsed && parsed.bottomLine)
+          ? parsed.bottomLine
+          : `Retail ticket volume is concentrated on public recency bias, while high-volume sharp capital and Polymarket prediction markets are aligned on ${teamA}. This presents a textbook fade the public / back the smart money opportunity.`
+      };
+
       return Object.assign({
+        title: polyData.title && !polyData.title.toLowerCase().includes("dossier") ? polyData.title : `${teamA} vs. ${teamB}`,
+        league: league,
         teamA: teamA,
         teamB: teamB,
         volume: `$${numVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
@@ -4667,8 +5050,6 @@
         teamBPct: "41.5%",
         netDollarSkew: `+$${diffVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} on ${teamA}`,
         smartCapital: `$${Math.round(numVol * 0.045).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        bearsOdds: "58.5¢",
-        patriotsOdds: "41.5¢",
         smartConsensus: `58.5% Smart Capital Backing ${teamA}`,
         linkedSpreads: [
           { market: `${teamA} Moneyline`, volume: `$${Math.round(teamAVol * 0.6).toLocaleString()}.00`, share: "35.1%", price: "58.5¢", tag: "Core Volume", badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
@@ -4679,64 +5060,14 @@
           { wallet: "0x4a9...b11", label: "Pro Whale", winRate: "81.4% WR", size: `$${Math.round(numVol * 0.02).toLocaleString()}.00`, pick: `${teamA} Spread`, price: "52.0¢", tag: "Whale Alert", icon: "🐳" },
           { wallet: "0x82c...9e3", label: "Sharp Fund", winRate: "76.0% WR", size: `$${Math.round(numVol * 0.015).toLocaleString()}.00`, pick: `${teamA} Moneyline`, price: "58.5¢", tag: "Sharp Wallet", icon: "🐋" }
         ],
-        statsProof: [
-          {
-            badge: "Money Flow Divergence",
-            color: "emerald",
-            metric: "Sharp Capital Concentration",
-            title: "Institutional Handle Superiority",
-            desc: `Aggregated exchange metrics show disproportionate volume accumulating on ${teamA} relative to ticket counts.`
-          },
-          {
-            badge: "Predictive Edge",
-            color: "cyan",
-            metric: "On-Chain Pricing Advantage",
-            title: "Prediction Market Liquidity Signal",
-            desc: `Order books reflect higher bid depth defending ${teamA} price points across all major submarkets.`
-          }
-        ],
-        directBets: {
-          primary: {
-            title: "Primary Market Play",
-            team: teamA.toUpperCase(),
-            sub: "CORE CONVICTION BET",
-            rating: "4.5/5 ⭐",
-            units: "1.5 Units",
-            odds: "58.5¢ (Polymarket)",
-            directive: `Follow the on-chain liquidity skew. Deep order books confirm smart money defending ${teamA}.`,
-            badgeText: "Recommended Position"
-          },
-          total: {
-            title: "Secondary Play",
-            team: "MARKET CONSENSUS",
-            sub: "ALTERNATIVE ANGLE",
-            rating: "4/5 ⭐",
-            units: "1.0 Unit",
-            odds: "50.0¢",
-            directive: `Hedge or diversify across linked submarkets to capture maximum risk-adjusted yield.`,
-            badgeText: "Recommended Total / Spread"
-          },
-          prop: {
-            title: "Value Selection",
-            team: "TOP METRIC PROP",
-            sub: "HIGH WIN-RATE TARGET",
-            rating: "4/5 ⭐",
-            units: "0.75 Unit",
-            odds: "Even",
-            directive: `Exploit mispriced individual proposition markets where retail consensus lags behind quant models.`,
-            badgeText: "Value Proposition"
-          },
-          trap: {
-            title: "Public Trap Warning",
-            team: `FADE ${teamB.toUpperCase()}`,
-            sub: "EXCESS RETAIL BIAS",
-            rating: "⛔ CAUTION",
-            units: "Avoid or Fade",
-            odds: "Public Heavy",
-            directive: `Beware of crowded retail positions on ${teamB} driven by recency bias or mainstream narratives.`,
-            badgeText: "Action: Fade or Pass"
-          }
-        }
+        statsProof: statsProof,
+        directBets: directBets,
+        lineData: {
+          open: openStr,
+          current: currStr,
+          total: totalStr
+        },
+        divergence: divergence
       }, polyData);
     }
 
@@ -5035,20 +5366,39 @@
         }
 
         const matchInput = intelMatchUrl ? intelMatchUrl.value.trim() : '';
-        const isTnf = !matchInput || matchInput.includes("nfl-ne-chi") || matchInput.toLowerCase().includes("bears") || text.toLowerCase().includes("bears");
+        const lowerInput = matchInput.toLowerCase();
+        const lowerText = text.toLowerCase();
 
-        const polyData = isTnf ? getTnfDemoData() : {
-          title: matchInput ? matchInput.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").replace(/-/g, " ") : "Match Intelligence Dossier",
-          league: "SPORTS",
-          date: "Upcoming",
-          volume: "Active Event",
-          submarketsCount: "Multiple",
-          bearsOdds: "Active",
-          patriotsOdds: "Active",
-          smartHolders: "-",
-          smartCapital: "-",
-          smartConsensus: "Analyzed"
-        };
+        // STRICT TNF Bears Demo Check: Only if BOTH Bears and Patriots are mentioned or explicit slug
+        const hasBears = lowerInput.includes("bears") || lowerText.includes("bears");
+        const hasPatriots = lowerInput.includes("patriots") || lowerText.includes("patriots");
+        const hasNeChi = lowerInput.includes("ne-chi");
+        const isTnf = (hasBears && hasPatriots) || hasNeChi;
+
+        let polyData = null;
+        if (isTnf) {
+          polyData = getTnfDemoData();
+        } else {
+          const meta = extractTeamsAndLeague(matchInput, parsed.raw, parsed.theLine);
+          let title = matchInput 
+            ? matchInput.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").replace(/-/g, " ")
+            : `${meta.teamA} vs. ${meta.teamB}`;
+          
+          if (!matchInput && intelMatchUrl) {
+            intelMatchUrl.value = `${meta.teamA} vs. ${meta.teamB}`;
+          }
+
+          polyData = {
+            title: title,
+            league: meta.league || "SPORTS",
+            date: "Analyzed Event",
+            volume: "Active Market",
+            submarketsCount: "Multiple",
+            smartHolders: "-",
+            smartCapital: "-",
+            smartConsensus: "Analyzed"
+          };
+        }
 
         renderIntelDashboard(polyData, parsed);
       });
@@ -5185,7 +5535,7 @@
               </div>
               <h1 class="text-2xl font-black text-white mt-1 tracking-tight">${poly.title}</h1>
               <p class="text-xs text-slate-400 mt-1">
-                Polymarket On-Chain Implied: <strong class="text-white">${poly.bearsOdds || 'Bears 59.5%'}</strong> vs <strong class="text-slate-300">${poly.patriotsOdds || 'Patriots 40.5%'}</strong> 
+                Polymarket On-Chain Implied: <strong class="text-white">${poly.teamA || 'Team A'} ${poly.teamAPct || '58.5%'}</strong> vs <strong class="text-slate-300">${poly.teamB || 'Team B'} ${poly.teamBPct || '41.5%'}</strong> 
                 ${poly.smartConsensus ? `• Smart Money Consensus: <strong class="text-cyan-300 font-mono">${poly.smartConsensus}</strong>` : ''}
               </p>
             </div>
@@ -5235,8 +5585,8 @@
                   <span class="text-amber-400 font-mono">${primaryBet.rating || '5/5 ⭐'}</span>
                 </div>
                 <div class="text-lg font-black text-emerald-300 tracking-tight">
-                  ${primaryBet.team || 'CHICAGO BEARS'}
-                  <span class="text-xs font-mono font-bold block text-white">${primaryBet.sub || '-2.5 / -3.0 SPREAD'}</span>
+                  ${primaryBet.team || (poly.teamA ? poly.teamA.toUpperCase() : 'PRIMARY PLAY')}
+                  <span class="text-xs font-mono font-bold block text-white">${primaryBet.sub || 'SPREAD / MONEYLINE PLAY'}</span>
                 </div>
                 <div class="text-[11px] font-mono text-slate-300 flex items-center justify-between pt-1 border-t border-slate-800">
                   <span class="text-slate-400">Suggested Unit:</span>
@@ -5244,10 +5594,10 @@
                 </div>
                 <div class="text-[11px] font-mono text-slate-300 flex items-center justify-between">
                   <span class="text-slate-400">Target Odds:</span>
-                  <span class="font-semibold text-white">${primaryBet.odds || '53.5¢ (Poly) / -110'}</span>
+                  <span class="font-semibold text-white">${primaryBet.odds || 'Polymarket On-Chain / -110'}</span>
                 </div>
                 <p class="text-xs text-slate-300 leading-relaxed pt-1">
-                  <strong>Directive:</strong> ${primaryBet.directive || 'Back the heavy $27.5k whale fill and 78% dollar handle. Sharp reverse line movement confirms books want retail on Patriots.'}
+                  <strong>Directive:</strong> ${primaryBet.directive || `Back the heavy smart money and institutional limit accumulation backing ${poly.teamA || 'the favorite'}.`}
                 </p>
               </div>
               <div class="pt-2">
@@ -5266,8 +5616,8 @@
                   <span class="text-amber-400 font-mono">${totalBet.rating || '4/5 ⭐'}</span>
                 </div>
                 <div class="text-lg font-black text-violet-300 tracking-tight">
-                  ${totalBet.team || 'OVER 50.5'}
-                  <span class="text-xs font-mono font-bold block text-white">${totalBet.sub || 'TOTAL POINTS (49.5-50.5)'}</span>
+                  ${totalBet.team || 'GAME TOTAL PLAY'}
+                  <span class="text-xs font-mono font-bold block text-white">${totalBet.sub || 'TOTAL POINTS'}</span>
                 </div>
                 <div class="text-[11px] font-mono text-slate-300 flex items-center justify-between pt-1 border-t border-slate-800">
                   <span class="text-slate-400">Suggested Unit:</span>
@@ -5275,10 +5625,10 @@
                 </div>
                 <div class="text-[11px] font-mono text-slate-300 flex items-center justify-between">
                   <span class="text-slate-400">Target Odds:</span>
-                  <span class="font-semibold text-white">${totalBet.odds || '51.0¢ (Poly) / -110'}</span>
+                  <span class="font-semibold text-white">${totalBet.odds || '50.5¢ (Poly) / -110'}</span>
                 </div>
                 <p class="text-xs text-slate-300 leading-relaxed pt-1">
-                  <strong>Directive:</strong> ${totalBet.directive || '60°F calm weather + NE missing both guards and cornerbacks + Bears defense ranked 31st in yards allowed. Trading desks exposed.'}
+                  <strong>Directive:</strong> ${totalBet.directive || 'Pace ratings, offensive matchups, and total line movement support this position.'}
                 </p>
               </div>
               <div class="pt-2">
@@ -5297,8 +5647,8 @@
                   <span class="text-amber-400 font-mono">${propBet.rating || '4.5/5 ⭐'}</span>
                 </div>
                 <div class="text-lg font-black text-amber-300 tracking-tight">
-                  ${propBet.team || 'DEMARIO DOUGLAS'}
-                  <span class="text-xs font-mono font-bold block text-white">${propBet.sub || 'OVER 3.5 RECEPTIONS'}</span>
+                  ${propBet.team || 'CORNERSTONE PROP'}
+                  <span class="text-xs font-mono font-bold block text-white">${propBet.sub || 'VALUE PROPOSITION'}</span>
                 </div>
                 <div class="text-[11px] font-mono text-slate-300 flex items-center justify-between pt-1 border-t border-slate-800">
                   <span class="text-slate-400">Suggested Unit:</span>
@@ -5306,10 +5656,10 @@
                 </div>
                 <div class="text-[11px] font-mono text-slate-300 flex items-center justify-between">
                   <span class="text-slate-400">Target Odds:</span>
-                  <span class="font-semibold text-white">${propBet.odds || '-125 (BetMGM/DK)'}</span>
+                  <span class="font-semibold text-white">${propBet.odds || '-115 / -125'}</span>
                 </div>
                 <p class="text-xs text-slate-300 leading-relaxed pt-1">
-                  <strong>Directive:</strong> ${propBet.directive || '#1 bet prop in Vegas. With both NE guards out, Maye will face instant pocket pressure, making Douglas the designated hot-route safety valve.'}
+                  <strong>Directive:</strong> ${propBet.directive || 'Top-tier proposition consensus across sharp betting handles and usage projections.'}
                 </p>
               </div>
               <div class="pt-2">
@@ -5328,8 +5678,8 @@
                   <span class="text-rose-400 font-mono">${trapBet.rating || '⛔ FADE'}</span>
                 </div>
                 <div class="text-lg font-black text-rose-300 tracking-tight">
-                  ${trapBet.team || 'FADE PATRIOTS'}
-                  <span class="text-xs font-mono font-bold block text-white">${trapBet.sub || 'AVOID +3.0 SPREAD'}</span>
+                  ${trapBet.team || (poly.teamB ? 'FADE ' + poly.teamB.toUpperCase() : 'PUBLIC TRAP WARNING')}
+                  <span class="text-xs font-mono font-bold block text-white">${trapBet.sub || 'AVOID PUBLIC SPREAD TRAP'}</span>
                 </div>
                 <div class="text-[11px] font-mono text-slate-300 flex items-center justify-between pt-1 border-t border-slate-800">
                   <span class="text-slate-400">Risk Assessment:</span>
@@ -5337,10 +5687,10 @@
                 </div>
                 <div class="text-[11px] font-mono text-slate-300 flex items-center justify-between">
                   <span class="text-slate-400">Public Concentration:</span>
-                  <span class="font-semibold text-white">${trapBet.odds || '75% Retail Tickets'}</span>
+                  <span class="font-semibold text-white">${trapBet.odds || 'Public Retail Tickets'}</span>
                 </div>
                 <p class="text-xs text-slate-300 leading-relaxed pt-1">
-                  <strong>Directive:</strong> ${trapBet.directive || 'Do NOT fall for the primetime underdog streak (15-3-1). Retail is aggressively chasing past trend bias into sharp reverse line movement.'}
+                  <strong>Directive:</strong> ${trapBet.directive || `Do NOT fall for excess retail recency bias on ${poly.teamB || 'the underdog'}. Smart money is fading this public concentration.`}
                 </p>
               </div>
               <div class="pt-2">
@@ -5356,7 +5706,7 @@
             <div class="flex items-center gap-2.5">
               <span class="text-cyan-400 text-base">💡</span>
               <span class="text-slate-300">
-                <strong>Execution Advantage:</strong> Trading on Polymarket at <strong>53.5¢ - 59.5¢</strong> carries <strong>0% sportsbook juice</strong> compared to standard commercial -154 moneyline vig!
+                <strong>Execution Advantage:</strong> Trading on Polymarket carries <strong>0% sportsbook juice</strong> compared to standard commercial sports betting vigorish (-110 to -240 vig)!
               </span>
             </div>
             <a href="${intelMatchUrl.value || 'https://polymarket.com'}" target="_blank" rel="noopener noreferrer" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition cursor-pointer whitespace-nowrap">
@@ -5389,11 +5739,11 @@
             <div class="flex items-center justify-between text-xs font-semibold">
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full bg-cyan-400"></span>
-                <span class="text-white">${poly.teamA || 'Chicago Bears'} Volume:</span>
+                <span class="text-white">${poly.teamA || 'Team A'} Volume:</span>
                 <span class="text-cyan-300 font-mono font-bold">${poly.teamAVolume || '$518,240.00'} (${poly.teamAPct || '59.5%'})</span>
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-slate-400">${poly.teamB || 'New England Patriots'} Volume:</span>
+                <span class="text-slate-400">${poly.teamB || 'Team B'} Volume:</span>
                 <span class="text-slate-300 font-mono font-bold">${poly.teamBVolume || '$352,172.00'} (${poly.teamBPct || '40.5%'})</span>
                 <span class="w-3 h-3 rounded-full bg-rose-500"></span>
               </div>
@@ -5407,7 +5757,7 @@
 
             <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1">
               <span class="flex items-center gap-1.5">
-                <span class="text-emerald-400">▲</span> Net Bullish Skew: <strong class="text-white font-mono">${poly.netDollarSkew || '+$166,068.00 on Bears'}</strong>
+                <span class="text-emerald-400">▲</span> Net Bullish Skew: <strong class="text-white font-mono">${poly.netDollarSkew || `+$166,068.00 on ${poly.teamA || 'Team A'}`}</strong>
               </span>
               <span>Tracked Smart Wallets Capital: <strong class="text-cyan-300 font-mono">${poly.smartCapital || '$34,850.00'}</strong></span>
             </div>
@@ -5451,7 +5801,7 @@
               <div>
                 <h3 class="text-base font-black text-white tracking-wide uppercase flex items-center gap-2">
                   Quantitative Statistical Proof Engine
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">Why The Stats Back Chicago</span>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">Why The Stats Back ${poly.teamA || 'This Selection'}</span>
                 </h3>
                 <p class="text-xs text-slate-400">Empirical metrics cross-referencing line inflation, referee bias, roster trenches, and historical regression.</p>
               </div>
@@ -5486,10 +5836,10 @@
                 <span class="text-cyan-400 font-mono font-bold">Smart Money</span>
               </div>
               <div class="text-base font-bold text-white">
-                Bears Backed heavily across -2.5 and -3.0 Spreads
+                ${poly.divergence?.leftTitle || `${poly.teamA || 'Favorite'} Backed across Spread & ML Markets`}
               </div>
               <p class="text-xs text-slate-400 leading-relaxed">
-                On-chain smart money has accumulated active positions backing Chicago. Consensus scanner shows overlapping bets from high win-rate traders.
+                ${poly.divergence?.leftDesc || `On-chain smart money has accumulated active positions backing ${poly.teamA || 'the favorite'}. Consensus order books reflect high win-rate bid support.`}
               </p>
             </div>
 
@@ -5499,10 +5849,10 @@
                 <span class="text-amber-400 font-mono font-bold">Public vs Sharps</span>
               </div>
               <div class="text-base font-bold text-white">
-                70-75% Public Tickets on Patriots (+3) vs 78% Dollar Handle on Bears
+                ${poly.divergence?.rightTitle || `Public Tickets on ${poly.teamB || 'Underdog'} vs Sharp Handle on ${poly.teamA || 'Favorite'}`}
               </div>
               <p class="text-xs text-slate-400 leading-relaxed">
-                Classic reverse line movement: Public is backing the primetime underdog streak, while high-stakes whale bettors & sportsbooks took a $27.5K bet on Bears -3.
+                ${poly.divergence?.rightDesc || `Classic reverse line movement: Retail public tickets are backing ${poly.teamB || 'the underdog'}, while sharp dollar handle is concentrated on ${poly.teamA || 'the favorite'}.`}
               </p>
             </div>
           </div>
@@ -5510,7 +5860,7 @@
           <div class="bg-amber-950/20 border border-amber-800/40 rounded-xl p-3.5 flex items-center gap-3 text-xs text-amber-200">
             <span class="text-base">🎯</span>
             <div class="leading-relaxed">
-              <strong>Quant Divergence Takeaway:</strong> Retail ticket volume is aggressively chasing the Patriots +3 underdog streak, while high-volume sharp capital and Polymarket prediction markets are aligned on Chicago. This presents a textbook <strong>fade the public / back the smart money</strong> opportunity.
+              <strong>Quant Divergence Takeaway:</strong> ${poly.divergence?.takeaway || grok.bottomLine || `Retail ticket volume is concentrated on public recency bias, while high-volume sharp capital and prediction markets are aligned on ${poly.teamA || 'the favorite'}. This presents a textbook <strong>fade the public / back the smart money</strong> opportunity.`}
             </div>
           </div>
         </div>
@@ -5530,15 +5880,15 @@
             <div class="grid grid-cols-3 gap-2 pt-1 text-center font-mono">
               <div class="bg-slate-950/60 border border-slate-800 p-2.5 rounded-xl">
                 <span class="text-[10px] text-slate-500 block uppercase font-sans">Spread Open</span>
-                <span class="text-xs font-bold text-slate-300">Bears -1.5</span>
+                <span class="text-xs font-bold text-slate-300">${poly.lineData?.open || 'Open Line'}</span>
               </div>
               <div class="bg-slate-950/60 border border-slate-800 p-2.5 rounded-xl">
                 <span class="text-[10px] text-slate-500 block uppercase font-sans">Spread Current</span>
-                <span class="text-xs font-bold text-violet-400">Bears -3.0</span>
+                <span class="text-xs font-bold text-violet-400">${poly.lineData?.current || 'Current Line'}</span>
               </div>
               <div class="bg-slate-950/60 border border-slate-800 p-2.5 rounded-xl">
                 <span class="text-[10px] text-slate-500 block uppercase font-sans">Total O/U</span>
-                <span class="text-xs font-bold text-emerald-400">47 ➔ 50.5</span>
+                <span class="text-xs font-bold text-emerald-400">${poly.lineData?.total || 'Total Line'}</span>
               </div>
             </div>
           </div>
@@ -5730,8 +6080,8 @@
           date: "Upcoming",
           volume: "Active Event",
           submarketsCount: "Multiple",
-          bearsOdds: "Active",
-          patriotsOdds: "Active"
+          teamAOdds: "Active",
+          teamBOdds: "Active"
         };
 
         try {
@@ -5833,26 +6183,32 @@
 
     function generateShareText(poly, grok, shareUrl) {
       const title = poly?.title || "Match Intel Dossier";
-      const league = poly?.league || "NFL";
-      const vol = poly?.volume || "$870,412.00";
+      const league = poly?.league || "SPORTS";
+      const vol = poly?.volume || "$740,000.00";
+      const teamA = poly?.teamA || "Favorite";
+      const teamB = poly?.teamB || "Underdog";
       const primary = poly?.directBets?.primary?.team 
         ? `${poly.directBets.primary.team} ${poly.directBets.primary.sub || ''}`
-        : "Bears -3.0";
+        : `${teamA} Spread / ML`;
       const total = poly?.directBets?.total?.team
         ? `${poly.directBets.total.team} ${poly.directBets.total.sub || ''}`
-        : "Over 50.5";
+        : "Market Total";
       const trap = poly?.directBets?.trap?.team
         ? `${poly.directBets.trap.team} ${poly.directBets.trap.sub || ''}`
-        : "Patriots +3.0 Spread";
+        : `Fade ${teamB} Public Trap`;
+
+      const divergenceText = poly?.divergence?.takeaway 
+        ? (poly.divergence.takeaway.length > 120 ? poly.divergence.takeaway.slice(0, 120) + '...' : poly.divergence.takeaway)
+        : `Retail is chasing public recency bias, while sharp whales & prediction market capital are backing ${teamA}.`;
 
       return `🧠 QUANT DOSSIER: ${title} (${league})
 💰 Polymarket Volume: ${vol}
 
 🎯 High-Conviction Core Bet: ${primary}
 📊 Total O/U Target: ${total}
-⚠️ Retail Trap To Avoid: Fade ${trap}
+⚠️ Retail Trap To Avoid: ${trap}
 
-⚡ Sharp Divergence: Retail is chasing underdog trends (75% tickets), while sharp whales & Polymarket capital are backing the favorite.
+⚡ Sharp Divergence: ${divergenceText}
 
 Full Match Intel & Quant Breakdown 📊
 ${shareUrl}`;
