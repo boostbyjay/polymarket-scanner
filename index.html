@@ -218,75 +218,119 @@
       </div>
 
       <!-- FILTER CONTROLS BAR -->
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 shadow-xl space-y-4">
-        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 shadow-xl space-y-3.5">
+        <!-- Row 1: Category tabs, Search, and Sort -->
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           
           <!-- Category Tabs -->
-          <div class="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800/80 self-start">
+          <div class="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800/80 self-start flex-wrap">
             <button class="cat-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition cursor-pointer" data-cat="all">All (<span id="catCountAll">0</span>)</button>
             <button class="cat-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition cursor-pointer" data-cat="profitable">Lifetime Profitable (<span id="catCountProfitable">0</span>)</button>
             <button class="cat-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition cursor-pointer" data-cat="unprofitable">Lifetime Unprofitable (<span id="catCountUnprofitable">0</span>)</button>
           </div>
 
-          <!-- Secondary Filter Controls -->
-          <div class="flex flex-wrap items-center gap-3">
+          <!-- Search & Primary Sort -->
+          <div class="flex flex-wrap items-center gap-2.5">
             <!-- Search -->
             <input 
               type="text" 
               id="searchFilter" 
               placeholder="Search wallet / username..." 
-              class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 w-40 sm:w-48"
+              class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 w-44 sm:w-52"
             />
-
-            <!-- Min Lifetime Bets -->
-            <div class="flex items-center gap-1.5 text-xs text-slate-300">
-              <span class="text-slate-500">Min Bets:</span>
-              <select id="minBetsFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono">
-                <option value="0">All Bets</option>
-                <option value="5">5+ bets</option>
-                <option value="10" selected>10+ bets</option>
-                <option value="25">25+ bets</option>
-                <option value="50">50+ bets</option>
-              </select>
-            </div>
-
-            <!-- Max Avg Bet Cap (Low amount sharps) -->
-            <div class="flex items-center gap-1.5 text-xs text-slate-300">
-              <span class="text-slate-500">Max Avg Bet:</span>
-              <select id="maxBetFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono">
-                <option value="0" selected>All Amounts</option>
-                <option value="50">&lt; $50 (Micro)</option>
-                <option value="100">&lt; $100 (Low)</option>
-                <option value="250">&lt; $250</option>
-                <option value="500">&lt; $500</option>
-              </select>
-            </div>
-
-            <!-- Trader Type (Bot / No Bot) -->
-            <div class="flex items-center gap-1.5 text-xs text-slate-300">
-              <span class="text-slate-500">Trader:</span>
-              <select id="botFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono">
-                <option value="all" selected>All Traders</option>
-                <option value="nobot">👤 Humans Only (No Bot)</option>
-                <option value="bot">🤖 Bots Only</option>
-              </select>
-            </div>
 
             <!-- Sort By -->
             <div class="flex items-center gap-1.5 text-xs text-slate-300">
-              <span class="text-slate-500">Sort:</span>
-              <select id="sortSelect" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500">
-                <option value="lifetime_pnl_desc">Highest Lifetime Profit ($)</option>
-                <option value="lifetime_pnl_asc">Biggest Lifetime Loss ($)</option>
-                <option value="lifetime_winrate_desc">Highest Lifetime Win %</option>
-                <option value="lifetime_bets_desc">Most Lifetime Bets</option>
-                <option value="avg_bet_asc">Lowest Avg Bet (Small Sharps)</option>
-                <option value="match_pnl_desc">Highest Profit on This Bet ($)</option>
+              <span class="text-slate-500 font-semibold">Sort:</span>
+              <select id="sortSelect" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-medium">
+                <option value="match_single_bet_desc" selected>💥 Largest Single Bet (This Market)</option>
+                <option value="match_invested_desc">💰 Largest Total Bet (This Market)</option>
+                <option value="lifetime_pnl_desc">🏆 Highest Lifetime Profit ($)</option>
+                <option value="lifetime_winrate_desc">🎯 Highest Lifetime Win %</option>
+                <option value="match_pnl_desc">📈 Highest Profit on This Bet ($)</option>
+                <option value="match_trades_desc">🔄 Most Trades on This Market</option>
+                <option value="avg_bet_asc">🦐 Lowest Avg Bet (Small Sharps)</option>
+                <option value="lifetime_pnl_asc">📉 Biggest Lifetime Loss ($)</option>
               </select>
             </div>
-
           </div>
         </div>
+
+        <!-- Row 2: Deep Market & Trader Filters -->
+        <div class="pt-3 border-t border-slate-800/80 flex flex-wrap items-center gap-3 text-xs">
+          
+          <!-- Min Bet Size on THIS Market -->
+          <div class="flex items-center gap-1.5 text-slate-300">
+            <span class="text-indigo-400 font-semibold flex items-center gap-1">
+              <span>💥</span> Min Single Bet:
+            </span>
+            <select id="minMatchBetFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono">
+              <option value="0" selected>All Bet Sizes</option>
+              <option value="100">&ge; $100</option>
+              <option value="500">&ge; $500</option>
+              <option value="1000">&ge; $1,000 (Large)</option>
+              <option value="2500">&ge; $2,500</option>
+              <option value="5000">&ge; $5,000 (Whale)</option>
+              <option value="10000">&ge; $10,000 (Mega)</option>
+            </select>
+          </div>
+
+          <!-- Outcome / Side Filter -->
+          <div class="flex items-center gap-1.5 text-slate-300">
+            <span class="text-cyan-400 font-semibold flex items-center gap-1">
+              <span>🎯</span> Pick / Side:
+            </span>
+            <select id="outcomeFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono">
+              <option value="all" selected>All Picks / Sides</option>
+            </select>
+          </div>
+
+          <!-- Total Invested on THIS Market -->
+          <div class="flex items-center gap-1.5 text-slate-300">
+            <span class="text-slate-400 font-semibold">Total Invested:</span>
+            <select id="minMatchInvestedFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono">
+              <option value="0" selected>All Amounts</option>
+              <option value="500">&ge; $500</option>
+              <option value="1000">&ge; $1,000</option>
+              <option value="5000">&ge; $5,000 (Whale)</option>
+              <option value="10000">&ge; $10,000</option>
+              <option value="25000">&ge; $25,000</option>
+            </select>
+          </div>
+
+          <!-- Trader Type (Bot / No Bot / Profitable / Sniper) -->
+          <div class="flex items-center gap-1.5 text-slate-300">
+            <span class="text-slate-400 font-semibold">Trader Profile:</span>
+            <select id="botFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono">
+              <option value="all" selected>All Traders</option>
+              <option value="profitable_humans">💎 Profitable Humans</option>
+              <option value="snipers">🎯 Snipers (70%+ Win Rate)</option>
+              <option value="whales">🐋 Market Whales (&ge;$5k)</option>
+              <option value="nobot">👤 Humans Only (No Bot)</option>
+              <option value="bot">🤖 Bots Only</option>
+            </select>
+          </div>
+
+          <!-- Min Lifetime Bets -->
+          <div class="flex items-center gap-1.5 text-slate-300">
+            <span class="text-slate-500">Min Lifetime Bets:</span>
+            <select id="minBetsFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono">
+              <option value="0">All Bets</option>
+              <option value="5">5+ bets</option>
+              <option value="10" selected>10+ bets</option>
+              <option value="25">25+ bets</option>
+              <option value="50">50+ bets</option>
+            </select>
+          </div>
+
+          <!-- Reset Filter Button -->
+          <button id="resetSingleFiltersBtn" type="button" class="ml-auto px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer text-xs flex items-center gap-1" title="Reset all filters to default">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            <span>Reset</span>
+          </button>
+
+        </div>
+      </div>
 
         <!-- Current View Description Banner -->
         <div id="viewBanner" class="text-xs text-slate-400 bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
@@ -302,17 +346,16 @@
             <thead class="sticky top-0 bg-slate-950/95 backdrop-blur-sm border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider z-10">
               <tr>
                 <th class="py-3 px-2 w-8 text-center">⭐</th>
-                <th class="py-3 px-3.5 w-12">#</th>
-                <th class="py-3 px-3.5 w-24">Type</th>
-                <th class="py-3 px-3.5 w-28">Status</th>
-                <th class="py-3 px-3.5">Wallet / Trader</th>
-                <th class="py-3 px-3.5 text-right font-bold text-white">Lifetime P&L</th>
-                <th class="py-3 px-3.5 w-36">Lifetime Win %</th>
-                <th class="py-3 px-3.5">Lifetime Record</th>
-                <th class="py-3 px-3.5">Avg Bet Size</th>
-                <th class="py-3 px-3.5 text-right">In This Bet P&L</th>
-                <th class="py-3 px-3.5 text-right">This Invested</th>
-                <th class="py-3 px-3.5 text-center w-20">History</th>
+                <th class="py-3 px-3 w-10 text-center">#</th>
+                <th class="py-3 px-2.5 w-20">Type</th>
+                <th class="py-3 px-2.5 w-24 text-center">Pick</th>
+                <th class="py-3 px-3">Wallet / Trader</th>
+                <th class="py-3 px-3 text-right font-bold text-white">Lifetime P&L</th>
+                <th class="py-3 px-3 w-32">Lifetime Win %</th>
+                <th class="py-3 px-3 text-right font-bold text-indigo-300">Biggest Bet (Here)</th>
+                <th class="py-3 px-3 text-right">Total Invested</th>
+                <th class="py-3 px-3 text-right">In This Bet P&L</th>
+                <th class="py-3 px-2 text-center w-16">Audit</th>
               </tr>
             </thead>
             <tbody id="walletsTableBody" class="divide-y divide-slate-800/60 font-mono">
@@ -1082,9 +1125,12 @@
     // Filter controls
     const searchFilter = document.getElementById('searchFilter');
     const minBetsFilter = document.getElementById('minBetsFilter');
-    const maxBetFilter = document.getElementById('maxBetFilter');
     const botFilter = document.getElementById('botFilter');
     const sortSelect = document.getElementById('sortSelect');
+    const minMatchBetFilter = document.getElementById('minMatchBetFilter');
+    const outcomeFilter = document.getElementById('outcomeFilter');
+    const minMatchInvestedFilter = document.getElementById('minMatchInvestedFilter');
+    const resetSingleFiltersBtn = document.getElementById('resetSingleFiltersBtn');
 
     // Modal
     const inspectorModal = document.getElementById('inspectorModal');
@@ -1221,10 +1267,34 @@
     });
 
     searchFilter.addEventListener('input', renderTable);
-    minBetsFilter.addEventListener('change', renderTable);
-    maxBetFilter.addEventListener('change', renderTable);
-    botFilter.addEventListener('change', renderTable);
-    sortSelect.addEventListener('change', renderTable);
+    if (minBetsFilter) minBetsFilter.addEventListener('change', renderTable);
+    if (botFilter) botFilter.addEventListener('change', renderTable);
+    if (sortSelect) sortSelect.addEventListener('change', renderTable);
+    if (minMatchBetFilter) minMatchBetFilter.addEventListener('change', renderTable);
+    if (outcomeFilter) outcomeFilter.addEventListener('change', renderTable);
+    if (minMatchInvestedFilter) minMatchInvestedFilter.addEventListener('change', renderTable);
+
+    if (resetSingleFiltersBtn) {
+      resetSingleFiltersBtn.addEventListener('click', () => {
+        searchFilter.value = '';
+        if (minBetsFilter) minBetsFilter.value = '10';
+        if (botFilter) botFilter.value = 'all';
+        if (minMatchBetFilter) minMatchBetFilter.value = '0';
+        if (outcomeFilter) outcomeFilter.value = 'all';
+        if (minMatchInvestedFilter) minMatchInvestedFilter.value = '0';
+        if (sortSelect) sortSelect.value = 'match_single_bet_desc';
+        activeCategory = 'all';
+        document.querySelectorAll('.cat-tab').forEach(t => {
+          t.classList.remove('bg-indigo-600', 'text-white');
+          t.classList.add('text-slate-400');
+          if (t.dataset.cat === 'all') {
+            t.classList.add('bg-indigo-600', 'text-white');
+            t.classList.remove('text-slate-400');
+          }
+        });
+        renderTable();
+      });
+    }
 
     exportCsvBtn.addEventListener('click', exportRankedCsv);
     closeModalBtn.addEventListener('click', () => inspectorModal.classList.add('hidden'));
@@ -1402,6 +1472,17 @@
         }
       } catch (e) {}
 
+      // Dynamically populate the Outcome/Side filter dropdown
+      if (outcomeFilter) {
+        outcomeFilter.innerHTML = '<option value="all" selected>All Picks / Sides</option>';
+        outcomes.forEach((name, idx) => {
+          const opt = document.createElement('option');
+          opt.value = idx.toString();
+          opt.textContent = `Pick: ${name}`;
+          outcomeFilter.appendChild(opt);
+        });
+      }
+
       const walletsMap = {};
 
       for (const t of rawTrades) {
@@ -1415,7 +1496,9 @@
             buysUsd: 0,
             sellsUsd: 0,
             shares: {},
-            tradesCount: 0
+            tradesCount: 0,
+            maxSingleBet: 0,
+            outcomeInvested: {}
           };
         }
 
@@ -1431,9 +1514,14 @@
         const idx = parseInt(t.outcomeIndex || 0, 10);
         const cost = size * price;
 
+        if (cost > w.maxSingleBet) {
+          w.maxSingleBet = cost;
+        }
+
         if (side === 'BUY') {
           w.buysUsd += cost;
           w.shares[idx] = (w.shares[idx] || 0) + size;
+          w.outcomeInvested[idx] = (w.outcomeInvested[idx] || 0) + cost;
         } else if (side === 'SELL') {
           w.sellsUsd += cost;
           w.shares[idx] = (w.shares[idx] || 0) - size;
@@ -1442,6 +1530,25 @@
 
       matchWallets = Object.values(walletsMap).map(w => {
         let currentValue = 0;
+        let primaryOutcomeIdx = 0;
+        let maxOutcomeInvested = -1;
+
+        for (const [idxStr, investedAmt] of Object.entries(w.outcomeInvested || {})) {
+          if (investedAmt > maxOutcomeInvested) {
+            maxOutcomeInvested = investedAmt;
+            primaryOutcomeIdx = parseInt(idxStr, 10);
+          }
+        }
+
+        if (maxOutcomeInvested <= 0) {
+          for (const [idxStr, count] of Object.entries(w.shares)) {
+            if (count > maxOutcomeInvested) {
+              maxOutcomeInvested = count;
+              primaryOutcomeIdx = parseInt(idxStr, 10);
+            }
+          }
+        }
+
         for (const [idxStr, count] of Object.entries(w.shares)) {
           const idx = parseInt(idxStr, 10);
           if (idx < prices.length) {
@@ -1452,6 +1559,7 @@
         const netPnl = (w.sellsUsd + currentValue) - w.buysUsd;
         const invested = w.buysUsd;
         const roi = invested > 0 ? (netPnl / invested) * 100 : 0;
+        const outcomeName = outcomes[primaryOutcomeIdx] || (primaryOutcomeIdx === 1 ? 'No' : 'Yes');
 
         let category = 'BREAKEVEN';
         if (netPnl > 0.01) category = 'PROFITABLE';
@@ -1463,6 +1571,9 @@
           matchPnl: netPnl,
           matchRoi: roi,
           matchInvested: invested,
+          matchMaxBet: w.maxSingleBet || 0,
+          matchOutcome: outcomeName,
+          primaryOutcomeIdx: primaryOutcomeIdx,
           matchSells: w.sellsUsd,
           matchCurrentValue: currentValue,
           matchTrades: w.tradesCount,
@@ -1710,31 +1821,50 @@
     function renderTable() {
       let filtered = [...lifetimeWallets];
 
-      // Filter by Category
+      // Filter by Category Tab (All / Profitable / Unprofitable)
       if (activeCategory === 'profitable') {
         filtered = filtered.filter(w => w.lifetimeCategory === 'PROFITABLE');
       } else if (activeCategory === 'unprofitable') {
         filtered = filtered.filter(w => w.lifetimeCategory === 'UNPROFITABLE');
       }
 
+      // Filter by Min Single Bet Size on THIS Market
+      const minSingleBet = parseFloat(minMatchBetFilter ? minMatchBetFilter.value : 0) || 0;
+      if (minSingleBet > 0) {
+        filtered = filtered.filter(w => (w.matchMaxBet || 0) >= minSingleBet);
+      }
+
+      // Filter by Pick / Side Taken on THIS Market
+      const selectedOutcome = outcomeFilter ? outcomeFilter.value : 'all';
+      if (selectedOutcome !== 'all') {
+        const targetIdx = parseInt(selectedOutcome, 10);
+        filtered = filtered.filter(w => w.primaryOutcomeIdx === targetIdx);
+      }
+
+      // Filter by Total Invested on THIS Market
+      const minInvested = parseFloat(minMatchInvestedFilter ? minMatchInvestedFilter.value : 0) || 0;
+      if (minInvested > 0) {
+        filtered = filtered.filter(w => (w.matchInvested || 0) >= minInvested);
+      }
+
+      // Filter by Trader Profile
+      const traderProfile = botFilter ? botFilter.value : 'all';
+      if (traderProfile === 'profitable_humans') {
+        filtered = filtered.filter(w => !w.isBot && w.lifetimePnl > 0.01);
+      } else if (traderProfile === 'snipers') {
+        filtered = filtered.filter(w => w.lifetimeWinRate >= 70 && w.lifetimePositions >= 5);
+      } else if (traderProfile === 'whales') {
+        filtered = filtered.filter(w => (w.matchInvested >= 5000) || ((w.matchMaxBet || 0) >= 2500));
+      } else if (traderProfile === 'nobot') {
+        filtered = filtered.filter(w => !w.isBot);
+      } else if (traderProfile === 'bot') {
+        filtered = filtered.filter(w => w.isBot);
+      }
+
       // Filter by Min Lifetime Bets
-      const minBets = parseInt(minBetsFilter.value, 10) || 0;
+      const minBets = parseInt(minBetsFilter ? minBetsFilter.value : 0, 10) || 0;
       if (minBets > 0) {
         filtered = filtered.filter(w => w.lifetimePositions >= minBets);
-      }
-
-      // Filter by Max Avg Bet
-      const maxBet = parseFloat(maxBetFilter.value) || 0;
-      if (maxBet > 0) {
-        filtered = filtered.filter(w => w.avgBetSize <= maxBet);
-      }
-
-      // Filter by Trader Type (Bot / No Bot)
-      const botVal = botFilter ? botFilter.value : 'all';
-      if (botVal === 'bot') {
-        filtered = filtered.filter(w => w.isBot);
-      } else if (botVal === 'nobot') {
-        filtered = filtered.filter(w => !w.isBot);
       }
 
       // Search Filter
@@ -1749,19 +1879,25 @@
       }
 
       // Sorting
-      const sortBy = sortSelect.value;
-      if (sortBy === 'lifetime_pnl_desc') {
+      const sortBy = sortSelect ? sortSelect.value : 'match_single_bet_desc';
+      if (sortBy === 'match_single_bet_desc') {
+        filtered.sort((a, b) => ((b.matchMaxBet || 0) - (a.matchMaxBet || 0)) || (b.matchInvested - a.matchInvested));
+      } else if (sortBy === 'match_invested_desc') {
+        filtered.sort((a, b) => (b.matchInvested - a.matchInvested) || ((b.matchMaxBet || 0) - (a.matchMaxBet || 0)));
+      } else if (sortBy === 'lifetime_pnl_desc') {
         filtered.sort((a, b) => b.lifetimePnl - a.lifetimePnl);
       } else if (sortBy === 'lifetime_pnl_asc') {
         filtered.sort((a, b) => a.lifetimePnl - b.lifetimePnl);
       } else if (sortBy === 'lifetime_winrate_desc') {
-        filtered.sort((a, b) => (b.lifetimeWinRate - a.lifetimeWinRate) || (a.avgBetSize - b.avgBetSize));
+        filtered.sort((a, b) => (b.lifetimeWinRate - a.lifetimeWinRate) || ((b.matchMaxBet || 0) - (a.matchMaxBet || 0)));
       } else if (sortBy === 'lifetime_bets_desc') {
         filtered.sort((a, b) => (b.lifetimePositions - a.lifetimePositions) || (b.lifetimeWinRate - a.lifetimeWinRate));
-      } else if (sortBy === 'avg_bet_asc') {
-        filtered.sort((a, b) => (a.avgBetSize - b.avgBetSize) || (b.lifetimeWinRate - a.lifetimeWinRate));
       } else if (sortBy === 'match_pnl_desc') {
         filtered.sort((a, b) => b.matchPnl - a.matchPnl);
+      } else if (sortBy === 'match_trades_desc') {
+        filtered.sort((a, b) => (b.matchTrades - a.matchTrades) || (b.matchInvested - a.matchInvested));
+      } else if (sortBy === 'avg_bet_asc') {
+        filtered.sort((a, b) => (a.avgBetSize - b.avgBetSize) || (b.lifetimeWinRate - a.lifetimeWinRate));
       }
 
       document.getElementById('tableShowingCount').textContent = `Showing ${filtered.length.toLocaleString()} of ${lifetimeWallets.length.toLocaleString()} wallets`;
@@ -1789,19 +1925,25 @@
         const mPnlColor = w.matchPnl > 0 ? 'text-emerald-400' : (w.matchPnl < 0 ? 'text-rose-400' : 'text-slate-400');
         const mPnlSign = w.matchPnl > 0 ? '+' : (w.matchPnl < 0 ? '-' : '');
 
-        const badgeColor = w.lifetimeCategory === 'PROFITABLE' 
-          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-          : (w.lifetimeCategory === 'UNPROFITABLE' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-slate-800 text-slate-400 border-slate-700');
-
         const shortAddr = `${w.wallet.slice(0, 6)}...${w.wallet.slice(-4)}`;
         const displayName = w.name ? `<span class="text-slate-100 font-semibold">${w.name}</span> <span class="text-slate-500 text-[10px]">(${shortAddr})</span>` : `<span class="text-slate-300">${shortAddr}</span>`;
 
-        let betBadge = '';
-        if (w.avgBetSize < 50) {
-          betBadge = `<span class="ml-1 px-1 py-0.2 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">Micro</span>`;
-        } else if (w.avgBetSize < 100) {
-          betBadge = `<span class="ml-1 px-1 py-0.2 text-[9px] font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase">Low</span>`;
+        let outcomeBadgeClass = "bg-slate-800 text-slate-300 border-slate-700";
+        const oName = (w.matchOutcome || '').toLowerCase();
+        if (oName === 'yes' || w.primaryOutcomeIdx === 0) {
+          outcomeBadgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold";
+        } else if (oName === 'no' || w.primaryOutcomeIdx === 1) {
+          outcomeBadgeClass = "bg-rose-500/10 text-rose-400 border-rose-500/30 font-bold";
+        } else {
+          outcomeBadgeClass = "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 font-bold";
         }
+
+        const maxSingleBetVal = w.matchMaxBet || 0;
+        let maxBetClass = "text-indigo-300 font-bold";
+        if (maxSingleBetVal >= 10000) maxBetClass = "text-amber-400 font-extrabold";
+        else if (maxSingleBetVal >= 5000) maxBetClass = "text-cyan-300 font-bold";
+        else if (maxSingleBetVal >= 1000) maxBetClass = "text-indigo-300 font-bold";
+        else maxBetClass = "text-slate-300 font-medium";
 
         const winRateColor = w.lifetimeWinRate >= 80 ? 'text-emerald-400' : (w.lifetimeWinRate >= 60 ? 'text-teal-400' : 'text-amber-400');
         const isStarred = isWalletStarred(w.wallet);
@@ -1813,44 +1955,38 @@
               ${starIcon}
             </button>
           </td>
-          <td class="py-3 px-3.5 font-mono text-slate-500">${idx + 1}</td>
-          <td class="py-3 px-3.5">
-            ${botBadge}
+          <td class="py-3 px-3 font-mono text-slate-500 text-center">${idx + 1}</td>
+          <td class="py-3 px-2.5">${botBadge}</td>
+          <td class="py-3 px-2.5 text-center">
+            <span class="inline-block px-2 py-0.5 text-[10px] rounded-md border uppercase tracking-wider ${outcomeBadgeClass}" title="Primary pick on this market">
+              ${w.matchOutcome || 'Yes'}
+            </span>
           </td>
-          <td class="py-3 px-3.5">
-            <span class="inline-block px-2 py-0.5 text-[10px] font-bold rounded border ${badgeColor}">${w.lifetimeCategory}</span>
-          </td>
-          <td class="py-3 px-3.5">
+          <td class="py-3 px-3">
             <a href="https://polymarket.com/profile/${w.wallet}" target="_blank" rel="noopener noreferrer" class="hover:underline flex items-center gap-1 text-xs">
               ${displayName}
               <svg class="w-3 h-3 text-slate-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
             </a>
           </td>
-          <td class="py-3 px-3.5 text-right font-bold text-sm ${ltPnlColor}">
+          <td class="py-3 px-3 text-right font-bold text-sm ${ltPnlColor}">
             ${ltPnlSign}$${Math.abs(w.lifetimePnl).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
           </td>
-          <td class="py-3 px-3.5">
-            <div class="flex items-center gap-2">
+          <td class="py-3 px-3">
+            <div class="flex items-center gap-1.5">
               <span class="font-bold ${winRateColor}">${w.lifetimeWinRate.toFixed(1)}%</span>
-              <div class="w-12 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                <div class="bg-emerald-400 h-full rounded-full" style="width: ${Math.min(100, w.lifetimeWinRate)}%"></div>
-              </div>
+              <span class="text-[10px] text-slate-500 font-mono">(${w.lifetimeWins}w/${w.lifetimePositions}m)</span>
             </div>
           </td>
-          <td class="py-3 px-3.5 text-slate-300">
-            <span class="font-bold text-white">${w.lifetimeWins}</span><span class="text-slate-500"> / ${w.lifetimePositions} mkts</span>
+          <td class="py-3 px-3 text-right font-mono text-xs ${maxBetClass}">
+            $${maxSingleBetVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
           </td>
-          <td class="py-3 px-3.5 text-slate-300">
-            <span>$${w.avgBetSize.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-            ${betBadge}
-          </td>
-          <td class="py-3 px-3.5 text-right font-mono ${mPnlColor}">
-            ${mPnlSign}$${Math.abs(w.matchPnl).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-          </td>
-          <td class="py-3 px-3.5 text-right text-slate-400 font-mono">
+          <td class="py-3 px-3 text-right text-slate-300 font-mono text-xs">
             $${w.matchInvested.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
           </td>
-          <td class="py-3 px-3.5 text-center">
+          <td class="py-3 px-3 text-right font-mono text-xs ${mPnlColor}">
+            ${mPnlSign}$${Math.abs(w.matchPnl).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+          </td>
+          <td class="py-3 px-2 text-center">
             <button class="inspect-btn px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] font-semibold transition cursor-pointer" data-wallet="${w.wallet}" data-name="${w.name || shortAddr}">
               Inspect
             </button>
@@ -1863,10 +1999,11 @@
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           toggleStarWallet(btn.dataset.wallet);
+          renderTable();
         });
       });
 
-      document.querySelectorAll('.inspect-btn').forEach(btn => {
+      tbody.querySelectorAll('.inspect-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           openTraderInspector(btn.dataset.wallet, btn.dataset.name);
         });
@@ -2009,7 +2146,8 @@
         "Rank", 
         "Trader_Type",
         "Bot_Signals",
-        "Lifetime_Category", 
+        "Lifetime_Category",
+        "Pick_Outcome",
         "Wallet", 
         "Pseudonym", 
         "Lifetime_PnL_USD", 
@@ -2018,9 +2156,10 @@
         "Lifetime_Losses", 
         "Lifetime_Total_Bets", 
         "Avg_Bet_Size_USD", 
+        "This_Bet_Max_Single_Bet_USD",
+        "This_Bet_Invested_USD", 
         "This_Bet_PnL_USD", 
         "This_Bet_ROI_Pct", 
-        "This_Bet_Invested_USD", 
         "This_Bet_Trades"
       ];
       const rows = lifetimeWallets.map((w, idx) => [
@@ -2028,6 +2167,7 @@
         w.botLabel || 'NO BOT',
         `"${(w.botDetail || '').replace(/"/g, '""')}"`,
         w.lifetimeCategory,
+        `"${w.matchOutcome || ''}"`,
         w.wallet,
         `"${(w.name || '').replace(/"/g, '""')}"`,
         w.lifetimePnl.toFixed(4),
@@ -2036,9 +2176,10 @@
         w.lifetimeLosses,
         w.lifetimePositions,
         w.avgBetSize.toFixed(2),
+        (w.matchMaxBet || 0).toFixed(2),
+        w.matchInvested.toFixed(2),
         w.matchPnl.toFixed(4),
         w.matchRoi.toFixed(2),
-        w.matchInvested.toFixed(4),
         w.matchTrades
       ]);
 
