@@ -377,9 +377,10 @@
           <div class="flex items-center gap-2 text-xs">
             <span class="text-slate-400 font-semibold">Market Scope:</span>
             <select id="whaleScopeSelect" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono">
-              <option value="25" selected>Top 25 Active Markets (~25k trades)</option>
-              <option value="40">Top 40 Active Markets (~40k trades)</option>
-              <option value="60">Top 60 Active Markets (Deep Scan)</option>
+              <option value="sports">⚽ Sports Only (Top 50 Active Matches)</option>
+              <option value="25" selected>Top 25 Active Markets (Fast Scan)</option>
+              <option value="50">Top 50 Active Markets (~50k trades)</option>
+              <option value="100">🔥 Top 100 Active Markets (Platform Sweep)</option>
             </select>
           </div>
         </div>
@@ -845,6 +846,9 @@
           <button type="button" class="consensus-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="unanimous">
             ⚡ 100% Agreement (No Opponents) (<span id="consensusPresetCountUnanimous">0</span>)
           </button>
+          <button type="button" class="consensus-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="sports">
+            ⚽ Sports Only (<span id="consensusPresetCountSports">0</span>)
+          </button>
           <button type="button" class="consensus-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="whales">
             🐋 Whale Positions (≥$2,500)
           </button>
@@ -1169,6 +1173,7 @@
     filterWhalePnl.addEventListener('change', renderWhaleTable);
     filterWhaleWinRate.addEventListener('change', renderWhaleTable);
     filterWhaleSort.addEventListener('change', renderWhaleTable);
+    whaleScopeSelect.addEventListener('change', () => { if (!isWhaleScanning) startWhaleScan(); });
     startWhaleScanBtn.addEventListener('click', startWhaleScan);
     whaleExportCsvBtn.addEventListener('click', exportWhalesCsv);
 
@@ -2065,20 +2070,55 @@
       whaleProgressLabel.innerHTML = `<span>Fetching top active markets on Polymarket...</span>`;
 
       try {
-        const scope = parseInt(whaleScopeSelect.value, 10) || 25;
+        const scopeVal = whaleScopeSelect.value;
+        const isSportsMode = (scopeVal === 'sports');
         const now = Math.floor(Date.now() / 1000);
         const cutoffTs = now - (whaleHours * 3600);
 
-        // Fetch top markets by 24h volume
-        const mResp = await fetch(`https://gamma-api.polymarket.com/markets?order=volume24hr&ascending=false&limit=${scope}`);
-        const markets = mResp.ok ? await mResp.json() : [];
+        let markets = [];
 
-        whaleProgressLabel.innerHTML = `<span>Pulling trade records from top ${markets.length} active markets...</span>`;
+        if (isSportsMode) {
+          whaleProgressLabel.innerHTML = `<span>Fetching top active sports matches (NBA, UCL, NFL, UFC)...</span>`;
+          whaleProgressBar.style.width = '15%';
+          whaleProgressPct.textContent = '15%';
+
+          const sportsResp = await fetch(`https://gamma-api.polymarket.com/events?tag_slug=sports&order=volume24hr&ascending=false&limit=45`);
+          if (sportsResp.ok) {
+            const events = await sportsResp.json();
+            const extractedMarkets = [];
+            events.forEach(ev => {
+              if (Array.isArray(ev.markets)) {
+                const sortedM = [...ev.markets].sort((a,b) => (parseFloat(b.volume24hr)||0) - (parseFloat(a.volume24hr)||0));
+                sortedM.slice(0, 2).forEach(m => {
+                  if (m.conditionId) {
+                    extractedMarkets.push({
+                      conditionId: m.conditionId,
+                      question: m.question || ev.title,
+                      volume24hr: parseFloat(m.volume24hr || ev.volume24hr || 0),
+                      eventTitle: ev.title,
+                      isSports: true
+                    });
+                  }
+                });
+              }
+            });
+            extractedMarkets.sort((a,b) => b.volume24hr - a.volume24hr);
+            markets = extractedMarkets.slice(0, 50);
+          }
+        } else {
+          const scope = parseInt(scopeVal, 10) || 25;
+          whaleProgressLabel.innerHTML = `<span>Fetching top ${scope} active markets on Polymarket...</span>`;
+          const mResp = await fetch(`https://gamma-api.polymarket.com/markets?order=volume24hr&ascending=false&limit=${scope}`);
+          markets = mResp.ok ? await mResp.json() : [];
+        }
+
+        whaleProgressLabel.innerHTML = `<span>Pulling trade records from top ${markets.length} ${isSportsMode ? 'sports' : 'active'} markets...</span>`;
         whaleProgressBar.style.width = '25%';
         whaleProgressPct.textContent = '25%';
 
         const allTrades = [];
         const batchSize = 8;
+        const sportsConditionIds = new Set(markets.map(m => (m.conditionId || '').toLowerCase()));
 
         for (let i = 0; i < markets.length; i += batchSize) {
           const chunk = markets.slice(i, i + batchSize);
@@ -2102,8 +2142,17 @@
             fetch(`https://data-api.polymarket.com/trades?limit=1000&offset=0`).then(r => r.ok ? r.json() : []).catch(() => []),
             fetch(`https://data-api.polymarket.com/trades?limit=1000&offset=1000`).then(r => r.ok ? r.json() : []).catch(() => [])
           ]);
-          if (Array.isArray(g0)) allTrades.push(...g0);
-          if (Array.isArray(g1)) allTrades.push(...g1);
+          const streamTrades = [...(Array.isArray(g0) ? g0 : []), ...(Array.isArray(g1) ? g1 : [])];
+          streamTrades.forEach(t => {
+            if (isSportsMode) {
+              const mId = (t.market || t.conditionId || '').toLowerCase();
+              if (sportsConditionIds.has(mId)) {
+                allTrades.push(t);
+              }
+            } else {
+              allTrades.push(t);
+            }
+          });
         } catch (e) {}
 
         // Filter and aggregate trades by wallet within the selected time window
@@ -2292,6 +2341,19 @@
       presetCountHumans.textContent = whaleWallets.filter(w => !w.isBot).length.toLocaleString();
       presetCountProfitableHumans.textContent = profitableHumans.length.toLocaleString();
       presetCountWhales.textContent = whales.length.toLocaleString();
+    }
+
+    function isSportsMarket(item) {
+      if (!item) return false;
+      if (item.isSports) return true;
+      const str = ((item.title || '') + ' ' + (item.question || '') + ' ' + (item.slug || '') + ' ' + (item.eventSlug || '')).toLowerCase();
+      const sportsKeywords = [
+        ' vs ', ' vs. ', ' fc ', ' ucl ', ' nba ', ' nfl ', ' epl ', ' premier league ', ' la liga ',
+        ' bundesliga ', ' serie a ', ' mls ', ' nhl ', ' mlb ', ' ufc ', ' mma ', ' match ', ' win against ',
+        ' champion ', ' super bowl ', ' finals ', ' world cup ', ' grand slam ', ' tennis ', ' formula 1 ',
+        ' f1 ', ' points ', ' spread ', ' o/u ', ' over/under ', ' goal ', ' touchdown '
+      ];
+      return sportsKeywords.some(kw => str.includes(kw));
     }
 
     function renderWhaleTable() {
@@ -3038,6 +3100,7 @@
     const consensusPresetCountAll = document.getElementById('consensusPresetCountAll');
     const consensusPresetCountStrong = document.getElementById('consensusPresetCountStrong');
     const consensusPresetCountUnanimous = document.getElementById('consensusPresetCountUnanimous');
+    const consensusPresetCountSports = document.getElementById('consensusPresetCountSports');
     const consensusSearchFilter = document.getElementById('consensusSearchFilter');
     const consensusMinHoldersFilter = document.getElementById('consensusMinHoldersFilter');
     const consensusSortSelect = document.getElementById('consensusSortSelect');
@@ -3302,6 +3365,8 @@
       if (consensusPresetCountAll) consensusPresetCountAll.textContent = totalSignals.toLocaleString();
       if (consensusPresetCountStrong) consensusPresetCountStrong.textContent = strong.length.toLocaleString();
       if (consensusPresetCountUnanimous) consensusPresetCountUnanimous.textContent = unanimous.length.toLocaleString();
+      const sportsSignals = consensusSignals.filter(s => isSportsMarket(s));
+      if (consensusPresetCountSports) consensusPresetCountSports.textContent = sportsSignals.length.toLocaleString();
 
       const totalCapital = consensusSignals.reduce((sum, s) => sum + s.totalCapital, 0);
       if (kpiConsensusTotalCapital) {
@@ -3336,6 +3401,8 @@
         filtered = filtered.filter(s => s.holderCount >= 3);
       } else if (activeConsensusPreset === 'unanimous') {
         filtered = filtered.filter(s => s.opponentCount === 0 && s.holderCount >= 2);
+      } else if (activeConsensusPreset === 'sports') {
+        filtered = filtered.filter(s => isSportsMarket(s));
       } else if (activeConsensusPreset === 'whales') {
         filtered = filtered.filter(s => s.totalCapital >= 2500);
       } else if (activeConsensusPreset === 'snipers') {
