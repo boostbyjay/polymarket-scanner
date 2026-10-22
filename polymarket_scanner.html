@@ -1023,7 +1023,12 @@
             </p>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <button id="intelArchiveToggleBtn" type="button" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-slate-700">
+              <span class="text-amber-400">📁</span>
+              <span>Saved Matches</span>
+              <span id="intelSavedCountBadge" class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-900 text-slate-400 border border-slate-700">0</span>
+            </button>
             <button id="intelSettingsToggleBtn" type="button" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-slate-700">
               <svg class="w-3.5 h-3.5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
               <span>xAI Key Settings</span>
@@ -1031,6 +1036,31 @@
             <button id="intelSampleTnfBtn" type="button" class="px-3 py-1.5 rounded-xl bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/30 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer">
               <span>🏈 Load TNF Demo</span>
             </button>
+          </div>
+        </div>
+
+        <!-- Saved Matches Archive Drawer (Collapsible) -->
+        <div id="intelArchiveDrawer" class="hidden bg-slate-950/90 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-amber-400 text-lg">📁</span>
+              <div>
+                <h4 class="text-xs font-bold text-white uppercase tracking-wider">Saved Match Intel Archive</h4>
+                <p class="text-[11px] text-slate-400">Past matches that have been intelled. Re-examine anytime, restore full quant breakdown, or copy the exact Grok prompt used.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="intelClearAllArchivesBtn" type="button" class="text-[10px] text-rose-400 hover:text-rose-300 font-medium px-2.5 py-1 rounded-lg bg-rose-950/30 border border-rose-900/40 cursor-pointer transition">
+                Clear All
+              </button>
+              <button id="intelCloseArchiveBtn" type="button" class="text-slate-500 hover:text-slate-300 text-xs p-1 cursor-pointer">
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div id="intelArchiveList" class="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+            <!-- Dynamically populated from localStorage -->
           </div>
         </div>
 
@@ -4244,8 +4274,16 @@
     const intelProgressBar = document.getElementById('intelProgressBar');
     const intelResultsArea = document.getElementById('intelResultsArea');
     const intelEmptyState = document.getElementById('intelEmptyState');
+    const intelArchiveToggleBtn = document.getElementById('intelArchiveToggleBtn');
+    const intelArchiveDrawer = document.getElementById('intelArchiveDrawer');
+    const intelArchiveList = document.getElementById('intelArchiveList');
+    const intelCloseArchiveBtn = document.getElementById('intelCloseArchiveBtn');
+    const intelClearAllArchivesBtn = document.getElementById('intelClearAllArchivesBtn');
+    const intelSavedCountBadge = document.getElementById('intelSavedCountBadge');
 
     let isIntelRunning = false;
+    let currentActiveIntel = null;
+    const SAVED_INTEL_STORAGE_KEY = 'polymarket_saved_intel';
 
     function initIntelApiKey() {
       const savedKey = localStorage.getItem('xai_api_key');
@@ -4634,12 +4672,7 @@
       }, polyData);
     }
 
-    function loadTnfDemo() {
-      if (intelMatchUrl) intelMatchUrl.value = "https://polymarket.com/sports/nfl/nfl-ne-chi-2026-10-23";
-
-      const demoPolyData = getTnfDemoData();
-
-      const demoGrokReport = `Across all 94 posts, the Bears at -3 are the slight favorite pick, but the big story is whether tonight finally breaks the streak of primetime underdogs covering.
+    const demoGrokReport = `Across all 94 posts, the Bears at -3 are the slight favorite pick, but the big story is whether tonight finally breaks the streak of primetime underdogs covering.
 
 **The line:** the Bears opened around -1.5 and are now -3 (moneyline about -154/+130). The total went from 47 to 50.5.
 
@@ -4667,6 +4700,251 @@
 
 **Bottom line:** the public and most of the money are on the Bears and the Over. The trend bettors and the reported sharp money lean Patriots +3.`;
 
+    function getSavedIntelList() {
+      try {
+        const raw = localStorage.getItem(SAVED_INTEL_STORAGE_KEY);
+        if (!raw) {
+          const tnfDemo = {
+            id: 'intel_tnf_demo_2026',
+            matchTitle: "Patriots vs. Bears (NFL Thursday Night Football)",
+            matchUrl: "https://polymarket.com/sports/nfl/nfl-ne-chi-2026-10-23",
+            league: "NFL",
+            volume: "$870,412.00",
+            dateSaved: "Oct 22, 2026",
+            polyData: getTnfDemoData(),
+            grokData: parseGrokReport(demoGrokReport),
+            grokPrompt: generateGrokSharpPrompt("Patriots vs. Bears (NFL Thursday Night Football)"),
+            primaryPick: "CHICAGO BEARS -2.5 / -3.0",
+            totalPick: "OVER 50.5"
+          };
+          localStorage.setItem(SAVED_INTEL_STORAGE_KEY, JSON.stringify([tnfDemo]));
+          return [tnfDemo];
+        }
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.error("Failed to parse saved intel list:", e);
+        return [];
+      }
+    }
+
+    function setSavedIntelList(list) {
+      try {
+        localStorage.setItem(SAVED_INTEL_STORAGE_KEY, JSON.stringify(list));
+        updateSavedCountBadge();
+        renderArchiveList();
+      } catch (e) {
+        console.error("Failed to write to localStorage:", e);
+      }
+    }
+
+    function updateSavedCountBadge() {
+      if (!intelSavedCountBadge) return;
+      const list = getSavedIntelList();
+      intelSavedCountBadge.textContent = list.length;
+      if (list.length > 0) {
+        intelSavedCountBadge.className = "text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold";
+      } else {
+        intelSavedCountBadge.className = "text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-900 text-slate-400 border border-slate-700";
+      }
+    }
+
+    function saveCurrentMatchIntel() {
+      if (!currentActiveIntel || !currentActiveIntel.poly) {
+        alert("Please load or audit a match dossier first before saving!");
+        return;
+      }
+
+      const list = getSavedIntelList();
+      const poly = currentActiveIntel.poly;
+      const grok = currentActiveIntel.grok;
+      const prompt = currentActiveIntel.prompt || generateGrokSharpPrompt(poly.title);
+      const url = intelMatchUrl ? intelMatchUrl.value.trim() : (poly.matchUrl || '');
+
+      const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const existingIdx = list.findIndex(item => 
+        norm(item.matchTitle) === norm(poly.title) || 
+        (url && item.matchUrl && item.matchUrl === url)
+      );
+
+      const primaryPick = poly.directBets?.primary?.team 
+        ? `${poly.directBets.primary.team} ${poly.directBets.primary.sub || ''}` 
+        : 'Active Pick';
+      const totalPick = poly.directBets?.total?.team 
+        ? `${poly.directBets.total.team} ${poly.directBets.total.sub || ''}` 
+        : '';
+
+      const record = {
+        id: existingIdx >= 0 ? list[existingIdx].id : 'intel_' + Date.now(),
+        matchTitle: poly.title,
+        matchUrl: url,
+        league: poly.league || 'SPORTS',
+        volume: poly.volume || '$870,412.00',
+        dateSaved: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        polyData: poly,
+        grokData: grok,
+        grokPrompt: prompt,
+        primaryPick: primaryPick,
+        totalPick: totalPick
+      };
+
+      if (existingIdx >= 0) {
+        list[existingIdx] = record;
+      } else {
+        list.unshift(record);
+      }
+
+      setSavedIntelList(list);
+
+      const saveBtn = document.getElementById('intelSaveDossierBtn');
+      if (saveBtn) {
+        saveBtn.innerHTML = `<span>✓ Saved in Archive</span>`;
+        saveBtn.className = "px-4 py-2 rounded-xl bg-slate-800 text-emerald-400 border border-emerald-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-lg shadow-emerald-950/40";
+      }
+      const saveBottomBtn = document.getElementById('intelSaveDossierBottomBtn');
+      if (saveBottomBtn) {
+        saveBottomBtn.innerHTML = `<span>✓ Saved</span>`;
+        saveBottomBtn.className = "px-3.5 py-2 rounded-xl bg-slate-800 text-emerald-400 border border-emerald-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap";
+      }
+
+      alert(`✓ Saved "${poly.title}" dossier to your Match Intel Archive!\n\nYou can reload this match anytime with full quant charts, dollar breakdowns, and the exact Grok prompt by clicking "📁 Saved Matches".`);
+    }
+
+    function renderArchiveList() {
+      if (!intelArchiveList) return;
+      const list = getSavedIntelList();
+
+      if (list.length === 0) {
+        intelArchiveList.innerHTML = `
+          <div class="text-center py-6 px-4 bg-slate-900/60 rounded-xl border border-slate-800 text-slate-400 space-y-2">
+            <span class="text-2xl block">📂</span>
+            <p class="text-xs font-semibold text-slate-300">No saved match dossiers in your archive.</p>
+            <p class="text-[11px] text-slate-500">Run an audit or load the TNF demo, then click <strong class="text-emerald-400">"💾 Save Match Intel"</strong> to store past analyzed matches here.</p>
+            <button id="intelQuickSaveDemoBtn" type="button" class="mt-2 px-3 py-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/30 text-xs font-bold transition cursor-pointer">
+              🏈 Load & Save TNF Demo to Archive
+            </button>
+          </div>
+        `;
+        const quickSaveBtn = document.getElementById('intelQuickSaveDemoBtn');
+        if (quickSaveBtn) {
+          quickSaveBtn.addEventListener('click', () => {
+            loadTnfDemo();
+            saveCurrentMatchIntel();
+          });
+        }
+        return;
+      }
+
+      intelArchiveList.innerHTML = list.map(item => `
+        <div class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition shadow-lg">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-violet-500/20 text-violet-300 border border-violet-500/30">${item.league || 'SPORTS'}</span>
+              <span class="text-[11px] text-slate-400 font-mono">${item.dateSaved || 'Recently'}</span>
+              <span class="text-xs text-slate-600">•</span>
+              <span class="text-[11px] text-emerald-400 font-mono font-semibold">${item.volume || 'Active Market'}</span>
+            </div>
+            <div class="text-sm font-bold text-white tracking-tight">${item.matchTitle}</div>
+            <div class="flex items-center gap-2 flex-wrap text-xs pt-0.5">
+              <span class="text-slate-400 text-[11px]">Best Bet:</span>
+              <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-bold text-[11px]">${item.primaryPick || 'Core Pick'}</span>
+              ${item.totalPick ? `<span class="px-2 py-0.5 rounded bg-violet-500/10 text-violet-300 border border-violet-500/30 font-bold text-[11px]">${item.totalPick}</span>` : ''}
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            <button data-load-id="${item.id}" type="button" class="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1 shadow-md shadow-violet-600/20">
+              <span>📂 Load Dossier</span>
+            </button>
+            <button data-prompt-id="${item.id}" type="button" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition cursor-pointer border border-slate-700 flex items-center gap-1" title="Copy the exact Grok sharp prompt used for this match">
+              <span>📋 Copy Grok Prompt</span>
+            </button>
+            <button data-del-id="${item.id}" type="button" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 text-xs transition cursor-pointer border border-slate-700" title="Delete this saved match">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      intelArchiveList.querySelectorAll('[data-load-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-load-id');
+          const currentList = getSavedIntelList();
+          const target = currentList.find(x => x.id === id);
+          if (target) {
+            if (intelMatchUrl) intelMatchUrl.value = target.matchUrl || target.matchTitle;
+            if (intelRawGrokInput && target.grokData) intelRawGrokInput.value = target.grokData.raw || '';
+            renderIntelDashboard(target.polyData, target.grokData);
+            if (intelArchiveDrawer) intelArchiveDrawer.classList.add('hidden');
+            if (intelResultsArea) {
+              intelResultsArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }
+        });
+      });
+
+      intelArchiveList.querySelectorAll('[data-prompt-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-prompt-id');
+          const currentList = getSavedIntelList();
+          const target = currentList.find(x => x.id === id);
+          if (target && target.grokPrompt) {
+            navigator.clipboard.writeText(target.grokPrompt).then(() => {
+              const origText = btn.innerHTML;
+              btn.innerHTML = `<span>✓ Copied!</span>`;
+              btn.classList.add('text-emerald-400');
+              setTimeout(() => {
+                btn.innerHTML = origText;
+                btn.classList.remove('text-emerald-400');
+              }, 2000);
+            }).catch(() => {
+              alert(target.grokPrompt);
+            });
+          }
+        });
+      });
+
+      intelArchiveList.querySelectorAll('[data-del-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-del-id');
+          const currentList = getSavedIntelList();
+          const target = currentList.find(x => x.id === id);
+          if (confirm(`Delete "${target ? target.matchTitle : 'this match'}" from your saved archive?`)) {
+            const updated = currentList.filter(x => x.id !== id);
+            setSavedIntelList(updated);
+          }
+        });
+      });
+    }
+
+    if (intelArchiveToggleBtn && intelArchiveDrawer) {
+      intelArchiveToggleBtn.addEventListener('click', () => {
+        intelArchiveDrawer.classList.toggle('hidden');
+        renderArchiveList();
+      });
+    }
+
+    if (intelCloseArchiveBtn && intelArchiveDrawer) {
+      intelCloseArchiveBtn.addEventListener('click', () => {
+        intelArchiveDrawer.classList.add('hidden');
+      });
+    }
+
+    if (intelClearAllArchivesBtn) {
+      intelClearAllArchivesBtn.addEventListener('click', () => {
+        if (confirm("Are you sure you want to clear all saved match intel dossiers?")) {
+          setSavedIntelList([]);
+        }
+      });
+    }
+
+    // Initialize saved badge & archive on page load
+    updateSavedCountBadge();
+
+    function loadTnfDemo() {
+      if (intelMatchUrl) intelMatchUrl.value = "https://polymarket.com/sports/nfl/nfl-ne-chi-2026-10-23";
+
+      const demoPolyData = getTnfDemoData();
       const parsedGrok = parseGrokReport(demoGrokReport);
       renderIntelDashboard(demoPolyData, parsedGrok);
     }
@@ -4818,6 +5096,14 @@
       const propBet = db.prop || {};
       const trapBet = db.trap || {};
 
+      const matchPrompt = generateGrokSharpPrompt(poly.title);
+      currentActiveIntel = {
+        poly: poly,
+        grok: grok,
+        prompt: matchPrompt,
+        timestamp: Date.now()
+      };
+
       intelResultsArea.innerHTML = `
         <!-- Match Banner -->
         <div class="bg-gradient-to-r from-violet-950/40 via-slate-900 to-slate-900 border border-violet-800/40 rounded-2xl p-6 shadow-xl space-y-4">
@@ -4836,8 +5122,11 @@
               </p>
             </div>
 
-            <div class="flex items-center gap-2">
-              <a href="${intelMatchUrl.value || 'https://polymarket.com'}" target="_blank" rel="noopener noreferrer" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs shadow-lg shadow-violet-600/20 transition flex items-center gap-1.5 cursor-pointer">
+            <div class="flex items-center gap-2 flex-wrap">
+              <button id="intelSaveDossierBtn" type="button" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                <span>💾 Save Match Intel</span>
+              </button>
+              <a href="${intelMatchUrl.value || 'https://polymarket.com'}" target="_blank" rel="noopener noreferrer" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs shadow-lg shadow-violet-600/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                 <span>Trade on Polymarket ↗</span>
               </a>
             </div>
@@ -5260,14 +5549,61 @@
               <span class="text-slate-400 text-[11px]">
                 Cross-verified across 50+ sharp posts on X & Polymarket on-chain order books.
               </span>
-              <a href="${intelMatchUrl.value || 'https://polymarket.com'}" target="_blank" rel="noopener noreferrer" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs text-center transition cursor-pointer">
-                Place Smart Bet on Polymarket ↗
-              </a>
+              <div class="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                <button id="intelSaveDossierBottomBtn" type="button" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                  <span>💾 Save Intel</span>
+                </button>
+                <a href="${intelMatchUrl.value || 'https://polymarket.com'}" target="_blank" rel="noopener noreferrer" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs text-center transition cursor-pointer whitespace-nowrap">
+                  Place Smart Bet on Polymarket ↗
+                </a>
+              </div>
             </div>
           </div>
 
         </div>
       `;
+
+      // Sync and bind Save Dossier buttons
+      const saveBtn = document.getElementById('intelSaveDossierBtn');
+      const saveBottomBtn = document.getElementById('intelSaveDossierBottomBtn');
+
+      function syncSaveButtons(isSaved) {
+        if (saveBtn) {
+          if (isSaved) {
+            saveBtn.innerHTML = `<span>✓ Saved in Archive</span>`;
+            saveBtn.className = "px-4 py-2 rounded-xl bg-slate-800 text-emerald-400 border border-emerald-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-lg shadow-emerald-950/40";
+          } else {
+            saveBtn.innerHTML = `<span>💾 Save Match Intel</span>`;
+            saveBtn.className = "px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap";
+          }
+        }
+        if (saveBottomBtn) {
+          if (isSaved) {
+            saveBottomBtn.innerHTML = `<span>✓ Saved in Archive</span>`;
+            saveBottomBtn.className = "px-3.5 py-2 rounded-xl bg-slate-800 text-emerald-400 border border-emerald-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap";
+          } else {
+            saveBottomBtn.innerHTML = `<span>💾 Save Intel</span>`;
+            saveBottomBtn.className = "px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap";
+          }
+        }
+      }
+
+      const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isCurrentSaved = getSavedIntelList().some(item => norm(item.matchTitle) === norm(poly.title));
+      syncSaveButtons(isCurrentSaved);
+
+      if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+          saveCurrentMatchIntel();
+          syncSaveButtons(true);
+        });
+      }
+      if (saveBottomBtn) {
+        saveBottomBtn.addEventListener('click', () => {
+          saveCurrentMatchIntel();
+          syncSaveButtons(true);
+        });
+      }
     }
 
     async function runMatchAudit() {
