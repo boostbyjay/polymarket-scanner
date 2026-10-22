@@ -4431,14 +4431,14 @@
       const theLine = extractSection(/\*\*(?:The\s+)?line(?:\s+movement)?:\*\*/i, /\*\*(?:Trends|Where\s+the\s+money|Sportsbook|Money)/i);
       const trendsRaw = extractSection(/\*\*(?:Trends(?:[^*]+)?)\*\*/i, /\*\*(?:Where\s+the\s+money|Sportsbook|Money)/i);
       const moneyRaw = extractSection(/\*\*(?:Where\s+the\s+money\s+is|Money\s+splits|Betting\s+splits)(?:[^*]+)?\*\*/i, /\*\*(?:Most-bet\s+props|Player\s+props|Props)/i);
-      const propsRaw = extractSection(/\*\*(?:Most-bet\s+props|Player\s+props|Top\s+props)(?:[^*]+)?\*\*/i, /\*\*(?:Injuries|Conditions|Weather)/i);
+      const propsRaw = extractSection(/\*\*(?:Most-bet\s+props|Player\s+props|Top\s+props|Props)(?:[^*]+)?\*\*/i, /\*\*(?:Injuries|Conditions|Weather|House|Book\s+needs|Bottom\s+line|Verdict|Direct)/i);
       const injuriesRaw = extractSection(/\*\*(?:Injuries\s+and\s+conditions|Injuries|Weather)(?:[^*]+)?\*\*/i, /\*\*(?:House|Book\s+needs|Bottom\s+line|Verdict)/i);
       const houseRaw = extractSection(/\*\*(?:House\/book\s+needs|Book\s+needs)(?:[^*]+)?\*\*/i, /\*\*(?:Bottom\s+line|Verdict|Final)/i);
       const bottomLine = extractSection(/\*\*(?:Bottom\s+line|Verdict|Conclusion|Recommendation)(?:[^*]+)?\*\*/i, null);
 
       function toBullets(raw) {
         if (!raw) return [];
-        return raw.split(/\n+/).map(l => l.replace(/^[-*•]\s*/, "").trim()).filter(l => l.length > 0);
+        return raw.split(/\n+/).map(l => l.replace(/^(?:[-*•]|\d+\.)\s*/, "").trim()).filter(l => l.length > 0);
       }
 
       return {
@@ -4475,7 +4475,12 @@
       if (matchInput.includes("nfl-ne-chi") || matchInput.toLowerCase().includes("bears")) {
         matchTitle = "Patriots vs. Bears (NFL Thursday Night Football)";
       } else if (matchInput) {
-        matchTitle = matchInput.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").replace(/-/g, " ");
+        const meta = extractTeamsAndLeague(matchInput, "", "");
+        if (meta && meta.teamA && meta.teamB && meta.teamA !== "Home Team") {
+          matchTitle = `${meta.teamA} vs. ${meta.teamB} (${meta.league})`;
+        } else {
+          matchTitle = matchInput.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").replace(/-/g, " ");
+        }
       }
 
       const promptText = generateGrokSharpPrompt(matchTitle);
@@ -4619,79 +4624,508 @@
       };
     }
 
+    // COMPREHENSIVE SPORTS TEAM DICTIONARY (NBA, NFL, MLB, NHL)
+    const SPORTS_TEAM_CODES = {
+      // NBA (30 Teams)
+      "cle": { name: "Cleveland Cavaliers", short: "Cavaliers", league: "NBA" },
+      "phi": { name: "Philadelphia 76ers", short: "76ers", league: "NBA" },
+      "bos": { name: "Boston Celtics", short: "Celtics", league: "NBA" },
+      "bkn": { name: "Brooklyn Nets", short: "Nets", league: "NBA" },
+      "bk":  { name: "Brooklyn Nets", short: "Nets", league: "NBA" },
+      "ny":  { name: "New York Knicks", short: "Knicks", league: "NBA" },
+      "nyk": { name: "New York Knicks", short: "Knicks", league: "NBA" },
+      "tor": { name: "Toronto Raptors", short: "Raptors", league: "NBA" },
+      "chi": { name: "Chicago Bulls", short: "Bulls", league: "NBA" },
+      "det": { name: "Detroit Pistons", short: "Pistons", league: "NBA" },
+      "ind": { name: "Indiana Pacers", short: "Pacers", league: "NBA" },
+      "mil": { name: "Milwaukee Bucks", short: "Bucks", league: "NBA" },
+      "atl": { name: "Atlanta Hawks", short: "Hawks", league: "NBA" },
+      "cha": { name: "Charlotte Hornets", short: "Hornets", league: "NBA" },
+      "mia": { name: "Miami Heat", short: "Heat", league: "NBA" },
+      "orl": { name: "Orlando Magic", short: "Magic", league: "NBA" },
+      "was": { name: "Washington Wizards", short: "Wizards", league: "NBA" },
+      "den": { name: "Denver Nuggets", short: "Nuggets", league: "NBA" },
+      "min": { name: "Minnesota Timberwolves", short: "Timberwolves", league: "NBA" },
+      "okc": { name: "Oklahoma City Thunder", short: "Thunder", league: "NBA" },
+      "por": { name: "Portland Trail Blazers", short: "Trail Blazers", league: "NBA" },
+      "uta": { name: "Utah Jazz", short: "Jazz", league: "NBA" },
+      "gsw": { name: "Golden State Warriors", short: "Warriors", league: "NBA" },
+      "gs":  { name: "Golden State Warriors", short: "Warriors", league: "NBA" },
+      "lac": { name: "LA Clippers", short: "Clippers", league: "NBA" },
+      "lal": { name: "Los Angeles Lakers", short: "Lakers", league: "NBA" },
+      "phx": { name: "Phoenix Suns", short: "Suns", league: "NBA" },
+      "pho": { name: "Phoenix Suns", short: "Suns", league: "NBA" },
+      "sac": { name: "Sacramento Kings", short: "Kings", league: "NBA" },
+      "dal": { name: "Dallas Mavericks", short: "Mavericks", league: "NBA" },
+      "hou": { name: "Houston Rockets", short: "Rockets", league: "NBA" },
+      "mem": { name: "Memphis Grizzlies", short: "Grizzlies", league: "NBA" },
+      "nop": { name: "New Orleans Pelicans", short: "Pelicans", league: "NBA" },
+      "no":  { name: "New Orleans Pelicans", short: "Pelicans", league: "NBA" },
+      "sas": { name: "San Antonio Spurs", short: "Spurs", league: "NBA" },
+      "sa":  { name: "San Antonio Spurs", short: "Spurs", league: "NBA" },
+
+      // NFL (32 Teams)
+      "ne":  { name: "New England Patriots", short: "Patriots", league: "NFL" },
+      "chi_nfl": { name: "Chicago Bears", short: "Bears", league: "NFL" },
+      "kc":  { name: "Kansas City Chiefs", short: "Chiefs", league: "NFL" },
+      "bal": { name: "Baltimore Ravens", short: "Ravens", league: "NFL" },
+      "buf": { name: "Buffalo Bills", short: "Bills", league: "NFL" },
+      "cin": { name: "Cincinnati Bengals", short: "Bengals", league: "NFL" },
+      "cle_nfl": { name: "Cleveland Browns", short: "Browns", league: "NFL" },
+      "pit": { name: "Pittsburgh Steelers", short: "Steelers", league: "NFL" },
+      "hou_nfl": { name: "Houston Texans", short: "Texans", league: "NFL" },
+      "ind_nfl": { name: "Indianapolis Colts", short: "Colts", league: "NFL" },
+      "jax": { name: "Jacksonville Jaguars", short: "Jaguars", league: "NFL" },
+      "ten": { name: "Tennessee Titans", short: "Titans", league: "NFL" },
+      "den_nfl": { name: "Denver Broncos", short: "Broncos", league: "NFL" },
+      "lv":  { name: "Las Vegas Raiders", short: "Raiders", league: "NFL" },
+      "lac_nfl": { name: "Los Angeles Chargers", short: "Chargers", league: "NFL" },
+      "dal_nfl": { name: "Dallas Cowboys", short: "Cowboys", league: "NFL" },
+      "nyg": { name: "New York Giants", short: "Giants", league: "NFL" },
+      "phi_nfl": { name: "Philadelphia Eagles", short: "Eagles", league: "NFL" },
+      "was_nfl": { name: "Washington Commanders", short: "Commanders", league: "NFL" },
+      "gb":  { name: "Green Bay Packers", short: "Packers", league: "NFL" },
+      "det_nfl": { name: "Detroit Lions", short: "Lions", league: "NFL" },
+      "min_nfl": { name: "Minnesota Vikings", short: "Vikings", league: "NFL" },
+      "atl_nfl": { name: "Atlanta Falcons", short: "Falcons", league: "NFL" },
+      "car": { name: "Carolina Panthers", short: "Panthers", league: "NFL" },
+      "no_nfl":  { name: "New Orleans Saints", short: "Saints", league: "NFL" },
+      "tb":  { name: "Tampa Bay Buccaneers", short: "Buccaneers", league: "NFL" },
+      "ari": { name: "Arizona Cardinals", short: "Cardinals", league: "NFL" },
+      "lar": { name: "Los Angeles Rams", short: "Rams", league: "NFL" },
+      "sf":  { name: "San Francisco 49ers", short: "49ers", league: "NFL" },
+      "sea": { name: "Seattle Seahawks", short: "Seahawks", league: "NFL" },
+      "nyj": { name: "New York Jets", short: "Jets", league: "NFL" },
+
+      // MLB (Popular)
+      "nyy": { name: "New York Yankees", short: "Yankees", league: "MLB" },
+      "lad": { name: "Los Angeles Dodgers", short: "Dodgers", league: "MLB" },
+      "nym": { name: "New York Mets", short: "Mets", league: "MLB" },
+      "chc": { name: "Chicago Cubs", short: "Cubs", league: "MLB" },
+      "cws": { name: "Chicago White Sox", short: "White Sox", league: "MLB" },
+      "sd":  { name: "San Diego Padres", short: "Padres", league: "MLB" },
+      "bos_mlb": { name: "Boston Red Sox", short: "Red Sox", league: "MLB" },
+      "hou_mlb": { name: "Houston Astros", short: "Astros", league: "MLB" },
+      "phi_mlb": { name: "Philadelphia Phillies", short: "Phillies", league: "MLB" },
+      "atl_mlb": { name: "Atlanta Braves", short: "Braves", league: "MLB" },
+
+      // NHL (Popular)
+      "edm": { name: "Edmonton Oilers", short: "Oilers", league: "NHL" },
+      "fla": { name: "Florida Panthers", short: "Panthers", league: "NHL" },
+      "nyr": { name: "New York Rangers", short: "Rangers", league: "NHL" },
+      "tor_nhl": { name: "Toronto Maple Leafs", short: "Maple Leafs", league: "NHL" },
+      "vgk": { name: "Vegas Golden Knights", short: "Golden Knights", league: "NHL" },
+      "col": { name: "Colorado Avalanche", short: "Avalanche", league: "NHL" },
+      "bos_nhl": { name: "Boston Bruins", short: "Bruins", league: "NHL" }
+    };
+
+    const SPORTS_NICKNAMES = {
+      // NBA
+      "cavaliers": { name: "Cleveland Cavaliers", short: "Cavaliers", league: "NBA" },
+      "cavs": { name: "Cleveland Cavaliers", short: "Cavaliers", league: "NBA" },
+      "76ers": { name: "Philadelphia 76ers", short: "76ers", league: "NBA" },
+      "sixers": { name: "Philadelphia 76ers", short: "76ers", league: "NBA" },
+      "philly": { name: "Philadelphia 76ers", short: "76ers", league: "NBA" },
+      "celtics": { name: "Boston Celtics", short: "Celtics", league: "NBA" },
+      "lakers": { name: "Los Angeles Lakers", short: "Lakers", league: "NBA" },
+      "warriors": { name: "Golden State Warriors", short: "Warriors", league: "NBA" },
+      "dubs": { name: "Golden State Warriors", short: "Warriors", league: "NBA" },
+      "knicks": { name: "New York Knicks", short: "Knicks", league: "NBA" },
+      "bucks": { name: "Milwaukee Bucks", short: "Bucks", league: "NBA" },
+      "nuggets": { name: "Denver Nuggets", short: "Nuggets", league: "NBA" },
+      "mavericks": { name: "Dallas Mavericks", short: "Mavericks", league: "NBA" },
+      "mavs": { name: "Dallas Mavericks", short: "Mavericks", league: "NBA" },
+      "suns": { name: "Phoenix Suns", short: "Suns", league: "NBA" },
+      "heat": { name: "Miami Heat", short: "Heat", league: "NBA" },
+      "clippers": { name: "LA Clippers", short: "Clippers", league: "NBA" },
+      "timberwolves": { name: "Minnesota Timberwolves", short: "Timberwolves", league: "NBA" },
+      "wolves": { name: "Minnesota Timberwolves", short: "Timberwolves", league: "NBA" },
+      "pacers": { name: "Indiana Pacers", short: "Pacers", league: "NBA" },
+      "thunder": { name: "Oklahoma City Thunder", short: "Thunder", league: "NBA" },
+      "bulls": { name: "Chicago Bulls", short: "Bulls", league: "NBA" },
+      "pistons": { name: "Detroit Pistons", short: "Pistons", league: "NBA" },
+      "raptors": { name: "Toronto Raptors", short: "Raptors", league: "NBA" },
+      "blazers": { name: "Portland Trail Blazers", short: "Trail Blazers", league: "NBA" },
+      "trail blazers": { name: "Portland Trail Blazers", short: "Trail Blazers", league: "NBA" },
+      "kings": { name: "Sacramento Kings", short: "Kings", league: "NBA" },
+      "spurs": { name: "San Antonio Spurs", short: "Spurs", league: "NBA" },
+      "jazz": { name: "Utah Jazz", short: "Jazz", league: "NBA" },
+      "wizards": { name: "Washington Wizards", short: "Wizards", league: "NBA" },
+      "hawks": { name: "Atlanta Hawks", short: "Hawks", league: "NBA" },
+      "hornets": { name: "Charlotte Hornets", short: "Hornets", league: "NBA" },
+      "magic": { name: "Orlando Magic", short: "Magic", league: "NBA" },
+      "pelicans": { name: "New Orleans Pelicans", short: "Pelicans", league: "NBA" },
+      "pels": { name: "New Orleans Pelicans", short: "Pelicans", league: "NBA" },
+      "grizzlies": { name: "Memphis Grizzlies", short: "Grizzlies", league: "NBA" },
+      "nets": { name: "Brooklyn Nets", short: "Nets", league: "NBA" },
+
+      // NFL
+      "bears": { name: "Chicago Bears", short: "Bears", league: "NFL" },
+      "patriots": { name: "New England Patriots", short: "Patriots", league: "NFL" },
+      "pats": { name: "New England Patriots", short: "Patriots", league: "NFL" },
+      "chiefs": { name: "Kansas City Chiefs", short: "Chiefs", league: "NFL" },
+      "49ers": { name: "San Francisco 49ers", short: "49ers", league: "NFL" },
+      "niners": { name: "San Francisco 49ers", short: "49ers", league: "NFL" },
+      "eagles": { name: "Philadelphia Eagles", short: "Eagles", league: "NFL" },
+      "ravens": { name: "Baltimore Ravens", short: "Ravens", league: "NFL" },
+      "bills": { name: "Buffalo Bills", short: "Bills", league: "NFL" },
+      "cowboys": { name: "Dallas Cowboys", short: "Cowboys", league: "NFL" },
+      "packers": { name: "Green Bay Packers", short: "Packers", league: "NFL" },
+      "lions": { name: "Detroit Lions", short: "Lions", league: "NFL" },
+      "dolphins": { name: "Miami Dolphins", short: "Dolphins", league: "NFL" },
+      "jets": { name: "New York Jets", short: "Jets", league: "NFL" },
+      "giants": { name: "New York Giants", short: "Giants", league: "NFL" },
+      "commanders": { name: "Washington Commanders", short: "Commanders", league: "NFL" },
+      "steelers": { name: "Pittsburgh Steelers", short: "Steelers", league: "NFL" },
+      "texans": { name: "Houston Texans", short: "Texans", league: "NFL" },
+      "colts": { name: "Indianapolis Colts", short: "Colts", league: "NFL" },
+      "jaguars": { name: "Jacksonville Jaguars", short: "Jaguars", league: "NFL" },
+      "jags": { name: "Jacksonville Jaguars", short: "Jaguars", league: "NFL" },
+      "titans": { name: "Tennessee Titans", short: "Titans", league: "NFL" },
+      "broncos": { name: "Denver Broncos", short: "Broncos", league: "NFL" },
+      "chargers": { name: "Los Angeles Chargers", short: "Chargers", league: "NFL" },
+      "raiders": { name: "Las Vegas Raiders", short: "Raiders", league: "NFL" },
+      "cardinals": { name: "Arizona Cardinals", short: "Cardinals", league: "NFL" },
+      "rams": { name: "Los Angeles Rams", short: "Rams", league: "NFL" },
+      "seahawks": { name: "Seattle Seahawks", short: "Seahawks", league: "NFL" },
+      "saints": { name: "New Orleans Saints", short: "Saints", league: "NFL" },
+      "falcons": { name: "Atlanta Falcons", short: "Falcons", league: "NFL" },
+      "panthers": { name: "Carolina Panthers", short: "Panthers", league: "NFL" },
+      "buccaneers": { name: "Tampa Bay Buccaneers", short: "Buccaneers", league: "NFL" },
+      "bucs": { name: "Tampa Bay Buccaneers", short: "Buccaneers", league: "NFL" },
+      "bengals": { name: "Cincinnati Bengals", short: "Bengals", league: "NFL" },
+      "browns": { name: "Cleveland Browns", short: "Browns", league: "NFL" },
+      "vikings": { name: "Minnesota Vikings", short: "Vikings", league: "NFL" },
+
+      // MLB
+      "yankees": { name: "New York Yankees", short: "Yankees", league: "MLB" },
+      "dodgers": { name: "Los Angeles Dodgers", short: "Dodgers", league: "MLB" },
+      "red sox": { name: "Boston Red Sox", short: "Red Sox", league: "MLB" },
+      "mets": { name: "New York Mets", short: "Mets", league: "MLB" },
+      "cubs": { name: "Chicago Cubs", short: "Cubs", league: "MLB" },
+      "white sox": { name: "Chicago White Sox", short: "White Sox", league: "MLB" },
+      "padres": { name: "San Diego Padres", short: "Padres", league: "MLB" },
+      "astros": { name: "Houston Astros", short: "Astros", league: "MLB" },
+      "braves": { name: "Atlanta Braves", short: "Braves", league: "MLB" },
+      "phillies": { name: "Philadelphia Phillies", short: "Phillies", league: "MLB" }
+    };
+
+    function resolveTeamCode(code, leagueHint) {
+      if (!code) return null;
+      const c = code.toLowerCase();
+      const lg = (leagueHint || "").toUpperCase();
+      if (lg === "NFL") {
+        if (c === "chi") return { name: "Chicago Bears", short: "Bears", league: "NFL" };
+        if (c === "cle") return { name: "Cleveland Browns", short: "Browns", league: "NFL" };
+        if (c === "phi") return { name: "Philadelphia Eagles", short: "Eagles", league: "NFL" };
+        if (c === "det") return { name: "Detroit Lions", short: "Lions", league: "NFL" };
+        if (c === "was") return { name: "Washington Commanders", short: "Commanders", league: "NFL" };
+        if (c === "den") return { name: "Denver Broncos", short: "Broncos", league: "NFL" };
+        if (c === "ind") return { name: "Indianapolis Colts", short: "Colts", league: "NFL" };
+        if (c === "hou") return { name: "Houston Texans", short: "Texans", league: "NFL" };
+        if (c === "atl") return { name: "Atlanta Falcons", short: "Falcons", league: "NFL" };
+        if (c === "dal") return { name: "Dallas Cowboys", short: "Cowboys", league: "NFL" };
+        if (c === "min") return { name: "Minnesota Vikings", short: "Vikings", league: "NFL" };
+        if (c === "lac") return { name: "Los Angeles Chargers", short: "Chargers", league: "NFL" };
+        if (c === "ne")  return { name: "New England Patriots", short: "Patriots", league: "NFL" };
+        if (c === "nyg") return { name: "New York Giants", short: "Giants", league: "NFL" };
+        if (c === "nyj") return { name: "New York Jets", short: "Jets", league: "NFL" };
+      } else if (lg === "NBA" || lg === "SPORTS" || !lg) {
+        if (c === "cle") return { name: "Cleveland Cavaliers", short: "Cavaliers", league: "NBA" };
+        if (c === "phi") return { name: "Philadelphia 76ers", short: "76ers", league: "NBA" };
+        if (c === "chi") return { name: "Chicago Bulls", short: "Bulls", league: "NBA" };
+        if (c === "bos") return { name: "Boston Celtics", short: "Celtics", league: "NBA" };
+        if (c === "gsw" || c === "gs") return { name: "Golden State Warriors", short: "Warriors", league: "NBA" };
+        if (c === "lal") return { name: "Los Angeles Lakers", short: "Lakers", league: "NBA" };
+        if (c === "lac") return { name: "LA Clippers", short: "Clippers", league: "NBA" };
+        if (c === "nyk" || c === "ny") return { name: "New York Knicks", short: "Knicks", league: "NBA" };
+      }
+      return SPORTS_TEAM_CODES[c] || null;
+    }
+
     function extractTeamsAndLeague(polyTitle, rawText, theLine) {
       const combined = ((polyTitle || "") + " " + (rawText || "") + " " + (theLine || "")).toLowerCase();
       
-      // 1. Detect League
-      let league = "SPORTS";
-      if (combined.includes("nba") || combined.includes("celtics") || combined.includes("lakers") || combined.includes("warriors") || 
-          combined.includes("knicks") || combined.includes("bucks") || combined.includes("nuggets") || combined.includes("mavericks") || 
-          combined.includes("76ers") || combined.includes("suns") || combined.includes("heat") || combined.includes("clippers") || 
-          combined.includes("timberwolves") || combined.includes("pacers") || combined.includes("cavaliers") || combined.includes("rebounds") || 
-          combined.includes("assists") || combined.includes("triple-double") || combined.includes("td garden") || combined.includes("crypto.com")) {
-        league = "NBA";
+      // 1. Detect League Hint
+      let leagueHint = "SPORTS";
+      if (combined.includes("nba") || combined.includes("celtics") || combined.includes("cavaliers") || 
+          combined.includes("76ers") || combined.includes("rebounds") || combined.includes("assists") ||
+          combined.includes("lakers") || combined.includes("warriors") || combined.includes("bucks")) {
+        leagueHint = "NBA";
       } else if (combined.includes("nfl") || combined.includes("touchdown") || combined.includes("passing yards") || 
-                 combined.includes("rushing yards") || combined.includes("quarterback") || combined.includes("interception") || 
-                 combined.includes("bears") || combined.includes("patriots") || combined.includes("chiefs") || combined.includes("eagles")) {
-        league = "NFL";
-      } else if (combined.includes("mlb") || combined.includes("strikeouts") || combined.includes("innings") || combined.includes("yankees") || combined.includes("dodgers")) {
-        league = "MLB";
+                 combined.includes("rushing yards") || combined.includes("quarterback") || 
+                 combined.includes("bears") || combined.includes("patriots") || combined.includes("chiefs")) {
+        leagueHint = "NFL";
+      } else if (combined.includes("mlb") || combined.includes("strikeouts") || combined.includes("innings") || 
+                 combined.includes("yankees") || combined.includes("dodgers")) {
+        leagueHint = "MLB";
       } else if (combined.includes("nhl") || combined.includes("puck line") || combined.includes("goals")) {
-        league = "NHL";
+        leagueHint = "NHL";
       }
 
-      // 2. Extract Team Names
-      let teamA = "Favorite";
-      let teamB = "Underdog";
+      let teamA = null;
+      let teamB = null;
+      let league = leagueHint;
 
-      // Method A: From polyTitle
-      if (polyTitle && !polyTitle.toLowerCase().includes("dossier") && !polyTitle.toLowerCase().includes("market")) {
-        const cleanTitle = polyTitle.replace(/^(?:nba|nfl|mlb|nhl|sports)[-_\s]+/i, "")
-                                    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, "")
-                                    .trim();
-        const vsParts = cleanTitle.split(/\s+(?:vs\.?|@|-)\s+/i);
-        if (vsParts.length >= 2 && vsParts[0].trim() && vsParts[1].trim()) {
-          teamA = vsParts[0].trim().replace(/\b\w/g, c => c.toUpperCase());
-          teamB = vsParts[1].trim().replace(/\b\w/g, c => c.toUpperCase());
-          return { league, teamA, teamB };
-        }
-      }
+      // Method 1: Check Slug / URL pattern (e.g. nba-cle-phi-2026-10-22, nfl-ne-chi-2026-10-23)
+      const cleanInput = (polyTitle || "").trim();
+      const slug = cleanInput.split("/").filter(Boolean).pop() || "";
+      const mSlug = slug.match(/^(?:(nba|nfl|mlb|nhl)[-_])?([a-z0-9]{2,4})[-_]([a-z0-9]{2,4})(?:[-_]\d{4}[-_]\d{2}[-_]\d{2})?$/i);
+      if (mSlug) {
+        if (mSlug[1]) league = mSlug[1].toUpperCase();
+        const resA = resolveTeamCode(mSlug[2], league);
+        const resB = resolveTeamCode(mSlug[3], league);
+        const nameA = resA ? resA.name : mSlug[2].toUpperCase();
+        const nameB = resB ? resB.name : mSlug[3].toUpperCase();
+        if (resA && resA.league) league = resA.league;
 
-      // Method B: From raw text or theLine
-      const chunk = (rawText || "").slice(0, 450);
-      
-      const mVs = chunk.match(/([A-Z][a-zA-Z\s]{2,25}?)\s+(?:vs\.?|@)\s+([A-Z][a-zA-Z\s]{2,25}?)(?:[.,\n\(\)]|\s+game|\s+match)/);
-      if (mVs) {
-        teamA = mVs[1].trim();
-        teamB = mVs[2].trim();
-        return { league, teamA, teamB };
-      }
-
-      const mOver = chunk.match(/(?:posts,?\s+(?:the\s+)?|posts\s+on\s+(?:the\s+)?|^)([A-Z][a-zA-Z\s]{2,25}?)\s+(?:at\s+[-+]?\d[^\n]*?|are[^\n]*?)\s+(?:over|against)\s+(?:the\s+)?([A-Z][a-zA-Z\s]{2,25}?)(?:\s+at|\s+in|[.,\n])/i);
-      if (mOver) {
-        teamA = mOver[1].trim();
-        teamB = mOver[2].trim();
-        return { league, teamA, teamB };
-      }
-
-      const mFav = chunk.match(/(?:posts,?\s+(?:the\s+)?|^)([A-Z][a-zA-Z\s]{2,25}?)\s+(?:at\s+[-+]?\d[^\n]*?are\s+(?:the\s+)?(?:slight\s+|favored\s+|consensus\s+|sharp\s+)?favorite)/i);
-      if (mFav) {
-        teamA = mFav[1].trim();
-        const mOpp = (rawText || "").match(/\*\*(?:On\s+the\s+)([A-Z][a-zA-Z\s]{2,25}?):\*\*/i);
-        if (mOpp && !mOpp[1].toLowerCase().includes(teamA.toLowerCase())) {
-          teamB = mOpp[1].trim();
+        // Check if teamB is favored over teamA in the text
+        const bShort = resB ? resB.short.toLowerCase() : nameB.toLowerCase();
+        const aShort = resA ? resA.short.toLowerCase() : nameA.toLowerCase();
+        const bFav = combined.includes(bShort + " -") || combined.includes(bShort + " at -") || combined.includes(bShort + " are favored");
+        const aFav = combined.includes(aShort + " -") || combined.includes(aShort + " at -") || combined.includes(aShort + " are favored");
+        if (bFav && !aFav) {
+          teamA = nameB;
+          teamB = nameA;
         } else {
-          const mOpp2 = (rawText || "").match(/(?:argument|case|support)\s+for\s+(?:the\s+)?([A-Z][a-zA-Z\s]{2,25}?)[.,\s]/i);
-          if (mOpp2 && !mOpp2[1].toLowerCase().includes(teamA.toLowerCase())) {
-            teamB = mOpp2[1].trim();
-          } else {
-            teamB = "Opponent";
+          teamA = nameA;
+          teamB = nameB;
+        }
+        return { league, teamA, teamB };
+      }
+
+      // Method 2: Scan for known team nicknames in text
+      const foundTeams = [];
+      for (const nick in SPORTS_NICKNAMES) {
+        const reg = new RegExp(`\\b${nick}\\b`, 'i');
+        const m = combined.match(reg);
+        if (m) {
+          const tObj = SPORTS_NICKNAMES[nick];
+          if (!foundTeams.some(ft => ft.name === tObj.name)) {
+            foundTeams.push({ name: tObj.name, short: tObj.short, league: tObj.league, index: m.index });
           }
         }
+      }
+
+      if (foundTeams.length >= 2) {
+        foundTeams.sort((a, b) => a.index - b.index);
+        const t1 = foundTeams[0];
+        const t2 = foundTeams[1];
+        league = t1.league || leagueHint;
+
+        const t1Fav = combined.includes(t1.short.toLowerCase() + " -") || 
+                      combined.includes(t1.name.toLowerCase() + " -") ||
+                      combined.includes(t1.short.toLowerCase() + " at -") ||
+                      combined.includes(t1.short.toLowerCase() + " are favored") ||
+                      combined.includes(t1.short.toLowerCase() + " are the slight favorite");
+
+        const t2Fav = combined.includes(t2.short.toLowerCase() + " -") || 
+                      combined.includes(t2.name.toLowerCase() + " -") ||
+                      combined.includes(t2.short.toLowerCase() + " at -") ||
+                      combined.includes(t2.short.toLowerCase() + " are favored") ||
+                      combined.includes(t2.short.toLowerCase() + " are the slight favorite");
+
+        if (t2Fav && !t1Fav) {
+          teamA = t2.name;
+          teamB = t1.name;
+        } else {
+          teamA = t1.name;
+          teamB = t2.name;
+        }
         return { league, teamA, teamB };
       }
 
-      return { league, teamA, teamB };
+      // Fallback Method 3: Regex split on "vs" or "@"
+      const cleanTitle = cleanInput.replace(/^(?:https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?)/i, "")
+                                   .replace(/^(?:nba|nfl|mlb|nhl)[-_\s]+/i, "")
+                                   .replace(/\b\d{4}-\d{2}-\d{2}\b/g, "")
+                                   .trim();
+      const vsParts = cleanTitle.split(/\s+(?:vs\.?|@|-)\s+/i);
+      if (vsParts.length >= 2 && vsParts[0].trim() && vsParts[1].trim()) {
+        teamA = vsParts[0].trim().replace(/\b\w/g, c => c.toUpperCase());
+        teamB = vsParts[1].trim().replace(/\b\w/g, c => c.toUpperCase());
+        return { league, teamA, teamB };
+      }
+
+      return { league, teamA: "Home Team", teamB: "Away Team" };
+    }
+
+    // DIRECT BET HELPER PARSERS
+    function parsePrimaryPlay(textLine, teamA, spreadNum) {
+      let tName = teamA.toUpperCase();
+      let tSub = spreadNum ? `${spreadNum} SPREAD` : "CORE BET";
+      let rating = "4.5/5 ⭐";
+      let units = "1.5 - 2.0 Units";
+      let directive = "";
+
+      const spMatch = textLine.match(/([-+]\d+\.?\d*)/);
+      if (spMatch) tSub = `${spMatch[1]} SPREAD`;
+
+      const uMatch = textLine.match(/(?:^|[^\d.])([0-5](?:\.\d+)?\s*(?:-\s*[0-5](?:\.\d+)?)?\s*(?:Units?|u))\b/i);
+      if (uMatch) units = uMatch[1].trim().replace(/u$/i, " Units");
+
+      const rMatch = textLine.match(/(\d+(?:\.\d+)?\s*\/\s*5\s*⭐?)/);
+      if (rMatch) rating = rMatch[1];
+
+      const teamM = textLine.match(/^([A-Za-z0-9\s\x27\.\-]+?)(?:\s+[-+]?\d|\s*\(|\s*[-–—:]|$)/);
+      if (teamM && teamM[1].trim().length >= 3 && !/^(?:Primary|Spread|Play|Best|Bet)/i.test(teamM[1].trim())) {
+        tName = teamM[1].trim().toUpperCase();
+      }
+
+      let cleaned = textLine;
+      cleaned = cleaned.replace(/^\s*(?:(?:Primary\s+)?(?:Spread(?:\/ML)?\s+Play|Spread\s+Play|Best\s+Bet|Core\s+Bet):?\s*)?/i, "");
+      if (tName && cleaned.toUpperCase().startsWith(tName)) {
+        cleaned = cleaned.slice(tName.length);
+      }
+      cleaned = cleaned.replace(/^\s*[-+]?\d+\.?\d*\s*[-–—:.]*\s*/i, "");
+      cleaned = cleaned.replace(/\([^)]*\)/g, "");
+      cleaned = cleaned.replace(/[-–—:]*\s*[0-5](?:\.\d+)?\s*(?:Units?|u)[-–—:]*/gi, "");
+      cleaned = cleaned.replace(/[-–—:]*\s*\d+(?:\.\d+)?\s*\/\s*5\s*⭐?[-–—:]*/g, "");
+      cleaned = cleaned.replace(/^[-–—:.\s]+/, "").replace(/[-–—:.\s]+$/, "").trim();
+
+      if (cleaned && cleaned.length >= 8 && !/^\d+(?:\.\d+)?$/.test(cleaned)) {
+        directive = cleaned;
+      } else {
+        directive = `Sharp money consensus and institutional order-book limits heavily back ${tName}. High-volume cash handle confirms smart position divergence.`;
+      }
+
+      return { tName, tSub, rating, units, directive };
+    }
+
+    function parseTotalBet(textLine, defaultTotal, league) {
+      let ou = "OVER";
+      let pts = defaultTotal || (league === "NBA" ? "226.5" : "48.5");
+      let rating = "4/5 ⭐";
+      let units = "1.0 Unit";
+      let directive = "";
+
+      const ouMatch = textLine.match(/\b(Over|Under)\s*(\d+\.?\d*)/i);
+      if (ouMatch) {
+        ou = ouMatch[1].toUpperCase();
+        pts = ouMatch[2];
+      } else {
+        const singleOu = textLine.match(/\b(Over|Under)\b/i);
+        if (singleOu) ou = singleOu[1].toUpperCase();
+        const singlePts = textLine.match(/\b(\d{2,3}(?:\.\d+)?)\b/);
+        if (singlePts) pts = singlePts[1];
+      }
+
+      const uMatch = textLine.match(/(?:^|[^\d.])([0-5](?:\.\d+)?\s*(?:-\s*[0-5](?:\.\d+)?)?\s*(?:Units?|u))\b/i);
+      if (uMatch) units = uMatch[1].trim().replace(/u$/i, " Units");
+
+      const rMatch = textLine.match(/(\d+(?:\.\d+)?\s*\/\s*5\s*⭐?)/);
+      if (rMatch) rating = rMatch[1];
+
+      let cleaned = textLine;
+      cleaned = cleaned.replace(/^\s*(?:(?:Game\s+)?Total(?:\s+Play)?|Total\s+Bet)?\s*:?\s*/i, "");
+      cleaned = cleaned.replace(/^\s*(?:Over|Under)\s*\d*(?:\.\d+)?\s*[-–—:.]*\s*/i, "");
+      cleaned = cleaned.replace(/\([^)]*\)/g, "");
+      cleaned = cleaned.replace(/[-–—:]*\s*[0-5](?:\.\d+)?\s*(?:Units?|u)[-–—:]*/gi, "");
+      cleaned = cleaned.replace(/[-–—:]*\s*\d+(?:\.\d+)?\s*\/\s*5\s*⭐?[-–—:]*/g, "");
+      cleaned = cleaned.replace(/^[-–—:.\s]+/, "").replace(/[-–—:.\s]+$/, "").trim();
+
+      if (cleaned && cleaned.length >= 8 && !/^\d+(?:\.\d+)?$/.test(cleaned)) {
+        directive = cleaned;
+      } else {
+        directive = `Pace regression, defensive efficiency metrics, and sharp total handle confirm value on ${ou} ${pts}.`;
+      }
+
+      return { ou, pts, units, rating, directive };
+    }
+
+    function parsePlayerProp(textLine, teamA, league) {
+      let pName = "TOP PLAYER PROP";
+      let pSub = "KEY VALUE TARGET";
+      let rating = "4.5/5 ⭐";
+      let units = "0.75 - 1.0 Unit";
+      let directive = "";
+
+      const uMatch = textLine.match(/(?:^|[^\d.])([0-5](?:\.\d+)?\s*(?:-\s*[0-5](?:\.\d+)?)?\s*(?:Units?|u))\b/i);
+      if (uMatch) units = uMatch[1].trim().replace(/u$/i, " Units");
+
+      const rMatch = textLine.match(/(\d+(?:\.\d+)?\s*\/\s*5\s*⭐?)/);
+      if (rMatch) rating = rMatch[1];
+
+      const cleanedLine = textLine.replace(/\([^)]*\)/g, "");
+      const m = cleanedLine.match(/([A-Z0-9][a-zA-Z0-9\.\x27\s\-]+?)\s+(over|under)\s+([0-9\.]+\s*(?:points|pts|rebounds|rebs|assists|ast|threes|3pm|yards|yds|catches|receptions|TDs|pass(?:ing)?\s+TDs|strikeouts|so)?)/i);
+      if (m) {
+        pName = m[1].trim().toUpperCase();
+        pSub = `${m[2].toUpperCase()} ${m[3].trim().toUpperCase()}`;
+      } else {
+        const tdM = cleanedLine.match(/([A-Z0-9][a-zA-Z0-9\.\x27\s\-]+?)\s+(anytime\s+TD|first-TD|double-double|triple-double)/i);
+        if (tdM) {
+          pName = tdM[1].trim().toUpperCase();
+          pSub = tdM[2].toUpperCase();
+        } else {
+          const firstChunk = textLine.split(/[(\-–—:,]/)[0].trim();
+          if (firstChunk && firstChunk.length > 3) {
+            pName = firstChunk.slice(0, 24).toUpperCase();
+            pSub = "TOP PROPOSITION PLAY";
+          }
+        }
+      }
+
+      let cleaned = textLine;
+      cleaned = cleaned.replace(/^\s*(?:(?:Top\s+)?Player\s+Prop:?\s*)?/i, "");
+      if (pName && cleaned.toUpperCase().startsWith(pName)) {
+        cleaned = cleaned.slice(pName.length);
+      }
+      cleaned = cleaned.replace(/^\s*(?:over|under)\s*[0-9\.]+\s*(?:points|pts|rebounds|rebs|assists|ast|threes|3pm|yards|yds|catches|receptions|TDs|pass(?:ing)?\s+TDs|strikeouts|so)?\s*[-–—:.]*\s*/i, "");
+      cleaned = cleaned.replace(/\([^)]*\)/g, "");
+      cleaned = cleaned.replace(/[-–—:]*\s*[0-5](?:\.\d+)?\s*(?:Units?|u)[-–—:]*/gi, "");
+      cleaned = cleaned.replace(/[-–—:]*\s*\d+(?:\.\d+)?\s*\/\s*5\s*⭐?[-–—:]*/g, "");
+      cleaned = cleaned.replace(/^[-–—:.\s]+/, "").replace(/[-–—:.\s]+$/, "").trim();
+
+      if (cleaned && cleaned.length >= 8 && !/^\d+(?:\.\d+)?$/.test(cleaned)) {
+        directive = cleaned;
+      } else {
+        directive = `Leading player proposition target with heavy sharp handle and usage projection alignment.`;
+      }
+
+      return { pName, pSub, rating, units, directive };
+    }
+
+    function parseTrapPlay(textLine, teamB) {
+      let teamStr = `FADE ${teamB.toUpperCase()}`;
+      let sub = `AVOID ${teamB.toUpperCase()} TRAP`;
+      let rating = "⛔ CAUTION / FADE";
+      let units = "Pass or Fade";
+      let odds = "Crowded Public Handle";
+      let directive = "";
+
+      const cleaned = textLine
+        .replace(/^\s*(?:Fade\s*(?:\/|or)?\s*Trap(?:\s+Warning)?|Public\s+Trap|Fade\s+Bet):?\s*/i, "")
+        .replace(/^[-*•\s]+/, "")
+        .trim();
+
+      if (cleaned.toLowerCase().includes(teamB.toLowerCase()) || 
+          cleaned.toLowerCase().includes(teamB.split(' ').pop().toLowerCase())) {
+        teamStr = `FADE ${teamB.toUpperCase()}`;
+      } else {
+        for (const nick in SPORTS_NICKNAMES) {
+          if (new RegExp(`\\b${nick}\\b`, 'i').test(cleaned)) {
+            teamStr = `FADE ${SPORTS_NICKNAMES[nick].name.toUpperCase()}`;
+            break;
+          }
+        }
+      }
+
+      if (cleaned.length >= 10) {
+        directive = cleaned;
+      } else {
+        directive = `Beware of public retail ticket volume chasing the ${teamB} spread into sharp reverse line movement.`;
+      }
+
+      return {
+        title: "Public Trap Warning",
+        team: teamStr,
+        sub: sub,
+        rating: rating,
+        units: units,
+        odds: odds,
+        directive: directive,
+        badgeText: "Action: Fade or Pass"
+      };
     }
 
     function extractDirectBets(parsed, teamA, teamB, league) {
@@ -4701,7 +5135,7 @@
       const props = parsed.props || [];
 
       const spreadMatch = theLine.match(/([-+]\d+\.?\d*)/);
-      const spreadNum = spreadMatch ? spreadMatch[1] : "-3.5";
+      const spreadNum = spreadMatch ? spreadMatch[1] : (league === "NBA" ? "-3.5" : "-3.0");
       
       const totalMatch = theLine.match(/total[^\d]*?(\d+\.?\d*)/i) || (theLine + " " + bottomLine).match(/(?:Over|Under)\s*(\d+\.?\d*)/i);
       const totalNum = totalMatch ? totalMatch[1] : (league === "NBA" ? "226.5" : "48.5");
@@ -4714,34 +5148,15 @@
       // 1. Primary Spread/ML Play
       const mPrimary = raw.match(/(?:Primary(?:\s+Spread(?:\/ML)?)?\s+Play|Core\s+Bet|Primary\s+Bet|Best\s+Bet):\*{0,2}\s*([^\n\r]+)/i);
       if (mPrimary) {
-        const textLine = mPrimary[1].trim();
-        const tMatch = textLine.match(/^([A-Za-z\s]+?)(?:\s+([-+]?\d+\.?\d*))?(?:\s*\((.*?)\))?\.?\s*(.*)$/);
-        let tName = teamA.toUpperCase();
-        let tSub = spreadNum ? `${spreadNum} SPREAD` : "CORE BET";
-        let rating = "4.5/5 ⭐";
-        let units = "1.5 - 2.0 Units";
-        let directive = textLine;
-
-        if (tMatch) {
-          if (tMatch[1] && tMatch[1].trim().length > 2) tName = tMatch[1].trim().toUpperCase();
-          if (tMatch[2]) tSub = `${tMatch[2].trim()} SPREAD`;
-          if (tMatch[3]) {
-            const uM = tMatch[3].match(/(\d+(?:\.\d+)?\s*(?:-\s*\d+(?:\.\d+)?)?\s*Units?)/i);
-            if (uM) units = uM[1];
-            const rM = tMatch[3].match(/(\d+(?:\.\d+)?\s*\/\s*5\s*⭐?)/);
-            if (rM) rating = rM[1];
-          }
-          if (tMatch[4] && tMatch[4].trim()) directive = tMatch[4].trim();
-        }
-
+        const primParsed = parsePrimaryPlay(mPrimary[1].trim(), teamA, spreadNum);
         primary = {
           title: "Primary Spread Play",
-          team: tName,
-          sub: tSub,
-          rating: rating,
-          units: units,
+          team: primParsed.tName,
+          sub: primParsed.tSub,
+          rating: primParsed.rating,
+          units: primParsed.units,
           odds: "Polymarket On-Chain / -110",
-          directive: directive.replace(/^[-*•\s]+/, ""),
+          directive: primParsed.directive,
           badgeText: "Recommended Spread Bet"
         };
       } else {
@@ -4762,34 +5177,15 @@
       // 2. Game Total Play
       const mTotal = raw.match(/(?:Game\s+Total(?:\s+Play)?|Total\s+Play|Total\s+Bet):\*{0,2}\s*([^\n\r]+)/i);
       if (mTotal) {
-        const textLine = mTotal[1].trim();
-        const tMatch = textLine.match(/^(Over|Under)\s*(\d+\.?\d*)?(?:\s*\((.*?)\))?\.?\s*(.*)$/i);
-        let ou = "OVER";
-        let pts = totalNum;
-        let rating = "4/5 ⭐";
-        let units = "1.0 Unit";
-        let directive = textLine;
-
-        if (tMatch) {
-          if (tMatch[1]) ou = tMatch[1].toUpperCase();
-          if (tMatch[2]) pts = tMatch[2];
-          if (tMatch[3]) {
-            const uM = tMatch[3].match(/(\d+(?:\.\d+)?\s*Units?)/i);
-            if (uM) units = uM[1];
-            const rM = tMatch[3].match(/(\d+(?:\.\d+)?\s*\/\s*5\s*⭐?)/);
-            if (rM) rating = rM[1];
-          }
-          if (tMatch[4] && tMatch[4].trim()) directive = tMatch[4].trim();
-        }
-
+        const totParsed = parseTotalBet(mTotal[1].trim(), totalNum, league);
         total = {
           title: "Game Total Play",
-          team: `${ou} ${pts}`.trim(),
-          sub: `TOTAL POINTS (${pts})`,
-          rating: rating,
-          units: units,
+          team: `${totParsed.ou} ${totParsed.pts}`.trim(),
+          sub: `TOTAL POINTS (${totParsed.pts})`,
+          rating: totParsed.rating,
+          units: totParsed.units,
           odds: "50.5¢ (Poly) / -110",
-          directive: directive.replace(/^[-*•\s]+/, ""),
+          directive: totParsed.directive,
           badgeText: "Recommended Total Bet"
         };
       } else {
@@ -4810,55 +5206,30 @@
       }
 
       // 3. Top Player Prop
-      const mProp = raw.match(/(?:Top\s+)?Player\s+Prop[^\n\r:]*?:\*{0,2}\s*([^\n\r]+)/i);
+      const mProp = raw.match(/(?:(?:Top\s+)?Player\s+Prop|Cornerstone\s+Prop)[^\n\r:]*?:\*{0,2}\s*([^\n\r]+)/i);
       if (mProp) {
-        const textLine = mProp[1].trim();
-        const pMatch = textLine.match(/^([A-Za-z\s\x27\.\-]+?)\s+(over|under)\s+([0-9\.]+[A-Za-z\s]+?)(?:\s*\((.*?)\))?\.?\s*(.*)$/i);
-        let pName = "TOP PLAYER PROP";
-        let pSub = "PROP TARGET";
-        let rating = "4.5/5 ⭐";
-        let units = "0.75 - 1.0 Unit";
-        let directive = textLine;
-
-        if (pMatch) {
-          pName = pMatch[1].trim().toUpperCase();
-          pSub = `${pMatch[2].toUpperCase()} ${pMatch[3].trim().toUpperCase()}`;
-          if (pMatch[4]) {
-            const uM = pMatch[4].match(/(\d+(?:\.\d+)?\s*Units?)/i);
-            if (uM) units = uM[1];
-            const rM = pMatch[4].match(/(\d+(?:\.\d+)?\s*\/\s*5\s*⭐?)/);
-            if (rM) rating = rM[1];
-          }
-          if (pMatch[5] && pMatch[5].trim()) directive = pMatch[5].trim();
-        }
-
+        const propParsed = parsePlayerProp(mProp[1].trim(), teamA, league);
         prop = {
           title: "Cornerstone Prop",
-          team: pName,
-          sub: pSub,
-          rating: rating,
-          units: units,
+          team: propParsed.pName,
+          sub: propParsed.pSub,
+          rating: propParsed.rating,
+          units: propParsed.units,
           odds: "-115 / -125",
-          directive: directive.replace(/^[-*•\s]+/, ""),
+          directive: propParsed.directive,
           badgeText: "Recommended Prop Bet"
         };
       } else if (props && props.length > 0) {
         const topProp = props[0];
-        const pMatch = topProp.match(/^([A-Za-z\s\x27\.\-]+?)\s+(over|under)\s+([0-9\.]+[A-Za-z\s]+?)(?:\s*\(.*?\))?$/i);
-        let pName = topProp.slice(0, 25).toUpperCase();
-        let pSub = "HIGH WIN-RATE TARGET";
-        if (pMatch) {
-          pName = pMatch[1].trim().toUpperCase();
-          pSub = `${pMatch[2].toUpperCase()} ${pMatch[3].trim().toUpperCase()}`;
-        }
+        const propParsed = parsePlayerProp(topProp, teamA, league);
         prop = {
           title: "Cornerstone Prop",
-          team: pName,
-          sub: pSub,
+          team: propParsed.pName,
+          sub: propParsed.pSub,
           rating: "4.5/5 ⭐",
           units: "0.75 - 1.0 Unit",
           odds: "-115 / -125",
-          directive: `Consensus #1 proposition play across major sportsbooks and sharp trading feeds.`,
+          directive: propParsed.directive || `Consensus #1 proposition play across major sportsbooks and sharp trading feeds.`,
           badgeText: "Recommended Prop Bet"
         };
       } else {
@@ -4875,28 +5246,14 @@
       }
 
       // 4. Fade / Trap Warning
-      const mTrap = raw.match(/(?:Fade|Trap)[^\n\r:]*?:\*{0,2}\s*([^\n\r]+)/i);
+      const mTrap = raw.match(/(?:Fade\s*(?:\/|or)?\s*Trap(?:\s+Warning)?|Public\s+Trap|Fade\s+Bet):\*{0,2}\s*([^\n\r]+)/i);
       if (mTrap) {
-        const textLine = mTrap[1].trim();
-        let teamStr = `FADE ${teamB.toUpperCase()}`;
-        const fadeMatch = textLine.match(/fade\s+([A-Za-z\s]+?)(?:\s+[-+]?\d|\.|$)/i);
-        if (fadeMatch) teamStr = `FADE ${fadeMatch[1].trim().toUpperCase()}`;
-
-        trap = {
-          title: "Public Trap Warning",
-          team: teamStr,
-          sub: "AVOID EXCESS RETAIL TRAP",
-          rating: "⛔ CAUTION / FADE",
-          units: "Pass or Fade",
-          odds: "Crowded Public Handle",
-          directive: textLine.replace(/^[-*•\s]+/, ""),
-          badgeText: "Action: Fade or Pass"
-        };
+        trap = parseTrapPlay(mTrap[1].trim(), teamB);
       } else {
         trap = {
           title: "Public Trap Warning",
           team: `FADE ${teamB.toUpperCase()}`,
-          sub: "AVOID UNDERDOG BIAS",
+          sub: `AVOID ${teamB.toUpperCase()} TRAP`,
           rating: "⛔ CAUTION / FADE",
           units: "Pass or Fade",
           odds: "Public Heavy",
@@ -5038,8 +5395,8 @@
           : `Retail ticket volume is concentrated on public recency bias, while high-volume sharp capital and Polymarket prediction markets are aligned on ${teamA}. This presents a textbook fade the public / back the smart money opportunity.`
       };
 
-      return Object.assign({
-        title: polyData.title && !polyData.title.toLowerCase().includes("dossier") ? polyData.title : `${teamA} vs. ${teamB}`,
+      return Object.assign({}, polyData, {
+        title: (teamA && teamB && teamA !== "Home Team" && teamA !== "Side A") ? `${teamA} vs. ${teamB}` : (polyData.title || `${teamA} vs. ${teamB}`),
         league: league,
         teamA: teamA,
         teamB: teamB,
@@ -5068,7 +5425,7 @@
           total: totalStr
         },
         divergence: divergence
-      }, polyData);
+      });
     }
 
     const demoGrokReport = `Across all 94 posts, the Bears at -3 are the slight favorite pick, but the big story is whether tonight finally breaks the streak of primetime underdogs covering.
@@ -5380,9 +5737,9 @@
           polyData = getTnfDemoData();
         } else {
           const meta = extractTeamsAndLeague(matchInput, parsed.raw, parsed.theLine);
-          let title = matchInput 
-            ? matchInput.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").replace(/-/g, " ")
-            : `${meta.teamA} vs. ${meta.teamB}`;
+          let title = (meta && meta.teamA && meta.teamB && meta.teamA !== "Home Team")
+            ? `${meta.teamA} vs. ${meta.teamB}`
+            : (matchInput ? matchInput.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").replace(/-/g, " ") : `${meta.teamA} vs. ${meta.teamB}`);
           
           if (!matchInput && intelMatchUrl) {
             intelMatchUrl.value = `${meta.teamA} vs. ${meta.teamB}`;
@@ -5391,6 +5748,8 @@
           polyData = {
             title: title,
             league: meta.league || "SPORTS",
+            teamA: meta.teamA,
+            teamB: meta.teamB,
             date: "Analyzed Event",
             volume: "Active Market",
             submarketsCount: "Multiple",
@@ -5597,7 +5956,7 @@
                   <span class="font-semibold text-white">${primaryBet.odds || 'Polymarket On-Chain / -110'}</span>
                 </div>
                 <p class="text-xs text-slate-300 leading-relaxed pt-1">
-                  <strong>Directive:</strong> ${primaryBet.directive || `Back the heavy smart money and institutional limit accumulation backing ${poly.teamA || 'the favorite'}.`}
+                  <strong>Directive:</strong> ${primaryBet.directive || `Back the heavy smart money and institutional limit accumulation backing ${poly.teamA || 'the primary pick'}.`}
                 </p>
               </div>
               <div class="pt-2">
@@ -5690,7 +6049,7 @@
                   <span class="font-semibold text-white">${trapBet.odds || 'Public Retail Tickets'}</span>
                 </div>
                 <p class="text-xs text-slate-300 leading-relaxed pt-1">
-                  <strong>Directive:</strong> ${trapBet.directive || `Do NOT fall for excess retail recency bias on ${poly.teamB || 'the underdog'}. Smart money is fading this public concentration.`}
+                  <strong>Directive:</strong> ${trapBet.directive || `Do NOT fall for excess retail recency bias on ${poly.teamB || 'the opposing side'}. Smart money is fading this public concentration.`}
                 </p>
               </div>
               <div class="pt-2">
@@ -5836,10 +6195,10 @@
                 <span class="text-cyan-400 font-mono font-bold">Smart Money</span>
               </div>
               <div class="text-base font-bold text-white">
-                ${poly.divergence?.leftTitle || `${poly.teamA || 'Favorite'} Backed across Spread & ML Markets`}
+                ${poly.divergence?.leftTitle || `${poly.teamA || 'Core Selection'} Backed across Spread & ML Markets`}
               </div>
               <p class="text-xs text-slate-400 leading-relaxed">
-                ${poly.divergence?.leftDesc || `On-chain smart money has accumulated active positions backing ${poly.teamA || 'the favorite'}. Consensus order books reflect high win-rate bid support.`}
+                ${poly.divergence?.leftDesc || `On-chain smart money has accumulated active positions backing ${poly.teamA || 'the core side'}. Consensus order books reflect high win-rate bid support.`}
               </p>
             </div>
 
@@ -5849,10 +6208,10 @@
                 <span class="text-amber-400 font-mono font-bold">Public vs Sharps</span>
               </div>
               <div class="text-base font-bold text-white">
-                ${poly.divergence?.rightTitle || `Public Tickets on ${poly.teamB || 'Underdog'} vs Sharp Handle on ${poly.teamA || 'Favorite'}`}
+                ${poly.divergence?.rightTitle || `Public Tickets on ${poly.teamB || 'Opposing Side'} vs Sharp Handle on ${poly.teamA || 'Core Selection'}`}
               </div>
               <p class="text-xs text-slate-400 leading-relaxed">
-                ${poly.divergence?.rightDesc || `Classic reverse line movement: Retail public tickets are backing ${poly.teamB || 'the underdog'}, while sharp dollar handle is concentrated on ${poly.teamA || 'the favorite'}.`}
+                ${poly.divergence?.rightDesc || `Classic reverse line movement: Retail public tickets are backing ${poly.teamB || 'the opposing side'}, while sharp dollar handle is concentrated on ${poly.teamA || 'the core side'}.`}
               </p>
             </div>
           </div>
@@ -6072,11 +6431,15 @@
       try {
         // Extract slug
         const mSlug = urlOrSlug.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").split(/[?#]/)[0];
-        
-        let matchTitle = mSlug.replace(/-/g, " ");
+        const meta = extractTeamsAndLeague(urlOrSlug, "", "");
+        let matchTitle = (meta && meta.teamA && meta.teamB && meta.teamA !== "Home Team")
+          ? `${meta.teamA} vs. ${meta.teamB}`
+          : mSlug.replace(/-/g, " ");
         let polyData = {
           title: matchTitle,
-          league: "SPORTS",
+          league: meta.league || "SPORTS",
+          teamA: meta.teamA,
+          teamB: meta.teamB,
           date: "Upcoming",
           volume: "Active Event",
           submarketsCount: "Multiple",
@@ -6185,8 +6548,8 @@
       const title = poly?.title || "Match Intel Dossier";
       const league = poly?.league || "SPORTS";
       const vol = poly?.volume || "$740,000.00";
-      const teamA = poly?.teamA || "Favorite";
-      const teamB = poly?.teamB || "Underdog";
+      const teamA = poly?.teamA || "Primary Side";
+      const teamB = poly?.teamB || "Opposing Side";
       const primary = poly?.directBets?.primary?.team 
         ? `${poly.directBets.primary.team} ${poly.directBets.primary.sub || ''}`
         : `${teamA} Spread / ML`;
