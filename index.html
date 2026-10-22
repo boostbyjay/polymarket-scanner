@@ -883,6 +883,9 @@
           <button type="button" class="consensus-preset-tab px-3.5 py-1.5 rounded-xl font-bold transition cursor-pointer bg-cyan-600 text-white shadow-sm" data-preset="all">
             All Shared Bets (<span id="consensusPresetCountAll">0</span>)
           </button>
+          <button type="button" class="consensus-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="linked">
+            🔗 Linked Spreads (<span id="consensusPresetCountLinked">0</span>)
+          </button>
           <button type="button" class="consensus-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="strong">
             🔥 Strong Consensus (3+ Wallets) (<span id="consensusPresetCountStrong">0</span>)
           </button>
@@ -906,13 +909,22 @@
             <input 
               type="text" 
               id="consensusSearchFilter" 
-              placeholder="Search by market question or outcome..." 
+              placeholder="Search by market question, team, outcome, or spread line..." 
               class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 pl-9 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-cyan-500"
             />
             <svg class="w-4 h-4 text-slate-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
           </div>
 
           <div class="flex items-center flex-wrap gap-2 text-xs">
+            <!-- Spread Linking Mode -->
+            <div class="flex items-center gap-1.5 text-slate-300">
+              <span class="text-slate-500">Spreads:</span>
+              <select id="consensusSpreadLinkMode" class="bg-slate-950 border border-cyan-500/40 rounded-xl px-2.5 py-1.5 text-xs text-cyan-300 outline-none focus:border-cyan-400 font-medium cursor-pointer shadow-sm">
+                <option value="linked" selected>🔗 Link Spreads & ML (Team Consensus)</option>
+                <option value="exact">🎯 Exact Line Only (Individual Markets)</option>
+              </select>
+            </div>
+
             <!-- Min Wallets in Agreement -->
             <div class="flex items-center gap-1.5 text-slate-300">
               <span class="text-slate-500">Min Agreement:</span>
@@ -940,11 +952,12 @@
         </div>
 
         <!-- Banner & Showing Count -->
-        <div class="text-xs text-slate-400 bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
+        <div class="text-xs text-slate-400 bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             Showing active markets with <strong>overlapping positions</strong> among profitable traders.
+            <span class="text-cyan-400 font-medium">🔗 Spreads and moneyline bets on the same team (e.g. Bears -2.5, Bears -3.5, Bears ML) are linked into unified team consensus signals.</span>
           </div>
-          <span id="consensusTableShowingCount" class="font-mono text-cyan-400 font-semibold">Showing 0 signals</span>
+          <span id="consensusTableShowingCount" class="font-mono text-cyan-400 font-semibold whitespace-nowrap">Showing 0 signals</span>
         </div>
 
         <!-- Signals Table -->
@@ -3239,10 +3252,12 @@
 
     // Presets & Filters
     const consensusPresetCountAll = document.getElementById('consensusPresetCountAll');
+    const consensusPresetCountLinked = document.getElementById('consensusPresetCountLinked');
     const consensusPresetCountStrong = document.getElementById('consensusPresetCountStrong');
     const consensusPresetCountUnanimous = document.getElementById('consensusPresetCountUnanimous');
     const consensusPresetCountSports = document.getElementById('consensusPresetCountSports');
     const consensusSearchFilter = document.getElementById('consensusSearchFilter');
+    const consensusSpreadLinkMode = document.getElementById('consensusSpreadLinkMode');
     const consensusMinHoldersFilter = document.getElementById('consensusMinHoldersFilter');
     const consensusSortSelect = document.getElementById('consensusSortSelect');
     const consensusTableShowingCount = document.getElementById('consensusTableShowingCount');
@@ -3250,8 +3265,389 @@
     const consensusExportCsvBtn = document.getElementById('consensusExportCsvBtn');
 
     let consensusSignals = [];
+    let cachedWalletPositionsMap = null;
     let isConsensusScanning = false;
     let activeConsensusPreset = 'all';
+
+    function parseSportsPosition(pos) {
+      const title = (pos.title || '').trim();
+      const outcome = (pos.outcome || 'Yes').trim();
+      const opposite = (pos.oppositeOutcome || '').trim();
+      const eventSlug = pos.eventSlug || pos.slug || '';
+      
+      const isTotal = /over\/under|o\/u|total\s+(points|goals|runs|rounds)/i.test(title);
+      const isSports = isSportsMarket(pos) || /spread|handicap/i.test(title) || /vs\.?|@/i.test(title);
+
+      if (!isSports || isTotal) {
+        return {
+          isLinked: false,
+          isSports: isSports,
+          isTotal: isTotal,
+          teamBacked: outcome,
+          lineLabel: outcome,
+          matchTitle: title,
+          baseEventKey: pos.conditionId || title,
+          groupKey: pos.conditionId || title
+        };
+      }
+
+      const mSpread = title.match(/(?:(\d+[HhQq])\s+)?(?:spread|handicap):\s*([^(\d]+?)\s*\(([+-]?\d+(?:\.\d+)?)\)/i);
+      const mVs = title.match(/^(.+?)\s+(?:vs\.?|at|@)\s+(.+?)$/i);
+
+      let teamBacked = outcome;
+      let lineLabel = outcome;
+      let isSpread = false;
+      let isML = false;
+
+      if (mSpread) {
+        isSpread = true;
+        const period = mSpread[1] ? (mSpread[1].toUpperCase() + ' ') : '';
+        const lineTeam = mSpread[2].trim();
+        const lineVal = parseFloat(mSpread[3]);
+
+        if (outcome.toLowerCase() === lineTeam.toLowerCase()) {
+          teamBacked = lineTeam;
+          const valStr = lineVal > 0 ? `+${lineVal}` : `${lineVal}`;
+          lineLabel = `${period}${lineTeam} ${valStr}`;
+        } else if (opposite && opposite.toLowerCase() === lineTeam.toLowerCase()) {
+          teamBacked = outcome;
+          const oppVal = -lineVal;
+          const valStr = oppVal > 0 ? `+${oppVal}` : `${oppVal}`;
+          lineLabel = `${period}${outcome} ${valStr}`;
+        } else {
+          teamBacked = outcome;
+          lineLabel = `${period}${outcome} (${lineVal})`;
+        }
+      } else if (mVs) {
+        isML = true;
+        const team1 = mVs[1].trim();
+        const team2 = mVs[2].trim();
+        if (outcome.toLowerCase() === team1.toLowerCase() || outcome.toLowerCase() === team2.toLowerCase()) {
+          teamBacked = outcome;
+          lineLabel = `${outcome} (ML)`;
+        } else {
+          teamBacked = outcome;
+          lineLabel = outcome;
+        }
+      } else {
+        teamBacked = outcome;
+        lineLabel = outcome;
+      }
+
+      let baseEventKey = eventSlug;
+      if (!baseEventKey) {
+        baseEventKey = (pos.slug || '').replace(/-(spread|total|winner|first-half|second-half).*$/i, '');
+      }
+      if (!baseEventKey && opposite) {
+        baseEventKey = [outcome.toLowerCase(), opposite.toLowerCase()].sort().join('_vs_');
+      }
+      if (!baseEventKey) {
+        baseEventKey = title;
+      }
+
+      let matchTitle = title;
+      if (isSpread && opposite) {
+        matchTitle = `${opposite} vs. ${outcome}`;
+      } else if (mVs) {
+        matchTitle = title;
+      }
+
+      return {
+        isLinked: true,
+        isSports: true,
+        isTotal: false,
+        isSpread: isSpread,
+        isML: isML,
+        teamBacked: teamBacked,
+        lineLabel: lineLabel,
+        matchTitle: matchTitle,
+        baseEventKey: baseEventKey,
+        groupKey: `LINKED__${baseEventKey}__${teamBacked.toLowerCase()}`
+      };
+    }
+
+    function recomputeConsensusSignals() {
+      if (!cachedWalletPositionsMap || cachedWalletPositionsMap.size === 0) return;
+
+      const spreadLinkMode = (consensusSpreadLinkMode && consensusSpreadLinkMode.value) ? consensusSpreadLinkMode.value : 'linked';
+      const isLinkedMode = (spreadLinkMode === 'linked');
+      const signals = [];
+
+      if (isLinkedMode) {
+        // LINKED SPREADS & MATCHUPS MODE
+        const clustersMap = new Map();
+        const eventParticipantsMap = new Map();
+        const masterMatchTitles = new Map();
+
+        for (const [addr, data] of cachedWalletPositionsMap.entries()) {
+          const wInfo = data.walletInfo;
+          for (const pos of data.positions) {
+            const parsed = parseSportsPosition(pos);
+            const grpKey = parsed.groupKey;
+            const evKey = parsed.baseEventKey;
+
+            if (parsed.isML) {
+              masterMatchTitles.set(evKey, parsed.matchTitle);
+            } else if (!masterMatchTitles.has(evKey)) {
+              masterMatchTitles.set(evKey, parsed.matchTitle);
+            }
+
+            if (!eventParticipantsMap.has(evKey)) {
+              eventParticipantsMap.set(evKey, new Set());
+            }
+            eventParticipantsMap.get(evKey).add(addr.toLowerCase());
+
+            if (!clustersMap.has(grpKey)) {
+              clustersMap.set(grpKey, {
+                groupKey: grpKey,
+                baseEventKey: evKey,
+                title: parsed.matchTitle,
+                slug: pos.slug || '',
+                eventSlug: pos.eventSlug || '',
+                conditionId: pos.conditionId || '',
+                icon: pos.icon || '',
+                endDate: pos.endDate || '',
+                outcome: parsed.teamBacked,
+                isLinked: parsed.isLinked,
+                isSports: parsed.isSports,
+                linesMap: new Map(),
+                walletsMap: new Map(),
+                totalCapital: 0,
+                totalCurValue: 0,
+                weightedPriceSum: 0,
+                capitalSum: 0
+              });
+            }
+
+            const cluster = clustersMap.get(grpKey);
+            const initVal = parseFloat(pos.initialValue || 0);
+            const curVal = parseFloat(pos.currentValue || 0);
+            const curPrice = parseFloat(pos.curPrice || 0);
+            const cashPnl = parseFloat(pos.cashPnl || 0);
+
+            if (!cluster.linesMap.has(parsed.lineLabel)) {
+              cluster.linesMap.set(parsed.lineLabel, { label: parsed.lineLabel, count: 0, capital: 0 });
+            }
+            const lineEntry = cluster.linesMap.get(parsed.lineLabel);
+            lineEntry.count += 1;
+            lineEntry.capital += initVal;
+
+            if (!cluster.walletsMap.has(addr.toLowerCase())) {
+              cluster.walletsMap.set(addr.toLowerCase(), {
+                wallet: wInfo.wallet,
+                name: wInfo.name || null,
+                lifetimePnl: wInfo.lifetimePnl || 0,
+                lifetimeWinRate: wInfo.lifetimeWinRate || 0,
+                isBot: !!wInfo.isBot,
+                isStarred: !!wInfo.isStarred,
+                totalCapital: 0,
+                currentValue: 0,
+                cashPnl: 0,
+                linesTaken: []
+              });
+            }
+            const wEntry = cluster.walletsMap.get(addr.toLowerCase());
+            wEntry.totalCapital += initVal;
+            wEntry.currentValue += curVal;
+            wEntry.cashPnl += cashPnl;
+            wEntry.linesTaken.push(`${parsed.lineLabel} ($${Math.round(initVal)})`);
+
+            cluster.totalCapital += initVal;
+            cluster.totalCurValue += curVal;
+            cluster.weightedPriceSum += (curPrice * initVal);
+            cluster.capitalSum += initVal;
+          }
+        }
+
+        for (const [grpKey, cluster] of clustersMap.entries()) {
+          if (masterMatchTitles.has(cluster.baseEventKey)) {
+            cluster.title = masterMatchTitles.get(cluster.baseEventKey);
+          }
+
+          const holders = Array.from(cluster.walletsMap.values());
+          const holderCount = holders.length;
+          const totalEvWallets = eventParticipantsMap.get(cluster.baseEventKey)?.size || holderCount;
+          const opponentCount = Math.max(0, totalEvWallets - holderCount);
+          const consensusPct = totalEvWallets > 0 ? (holderCount / totalEvWallets) * 100 : 100;
+          const avgWinRate = holders.reduce((sum, h) => sum + h.lifetimeWinRate, 0) / holderCount;
+          const avgPnl = holders.reduce((sum, h) => sum + h.lifetimePnl, 0) / holderCount;
+          const currentPrice = cluster.capitalSum > 0 ? (cluster.weightedPriceSum / cluster.capitalSum) : 0.5;
+
+          const linesArray = Array.from(cluster.linesMap.values());
+          linesArray.sort((a, b) => b.capital - a.capital);
+
+          let signalType = "⚡ CONSENSUS";
+          let signalBadgeClass = "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
+          let score = holderCount * 10 + (consensusPct / 10) + (avgWinRate / 10);
+
+          if (cluster.isLinked && linesArray.length >= 2) {
+            if (holderCount >= 3 && consensusPct >= 75) {
+              signalType = "🔥 STRONG LINKED";
+              signalBadgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold";
+              score += 35;
+            } else {
+              signalType = "🔗 LINKED SPREADS";
+              signalBadgeClass = "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold";
+              score += 25;
+            }
+          } else if (holderCount >= 3 && consensusPct >= 75) {
+            signalType = "🔥 STRONG CONSENSUS";
+            signalBadgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold";
+            score += 25;
+          } else if (cluster.totalCapital >= 5000) {
+            signalType = "🐋 SMART WHALE BET";
+            signalBadgeClass = "bg-purple-500/10 text-purple-400 border-purple-500/20 font-bold";
+            score += 15;
+          } else if (avgWinRate >= 80 && holderCount >= 2) {
+            signalType = "🎯 SNIPER CONSENSUS";
+            signalBadgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-bold";
+            score += 20;
+          }
+
+          signals.push({
+            title: cluster.title,
+            slug: cluster.slug,
+            eventSlug: cluster.eventSlug,
+            conditionId: cluster.conditionId,
+            icon: cluster.icon,
+            endDate: cluster.endDate,
+            outcome: cluster.outcome,
+            isLinked: cluster.isLinked,
+            lines: linesArray,
+            lineCount: linesArray.length,
+            currentPrice: currentPrice,
+            holders: holders,
+            holderCount: holderCount,
+            opponentCount: opponentCount,
+            consensusPct: consensusPct,
+            totalCapital: cluster.totalCapital,
+            totalCurValue: cluster.totalCurValue,
+            avgWinRate: avgWinRate,
+            avgPnl: avgPnl,
+            signalType: signalType,
+            signalBadgeClass: signalBadgeClass,
+            score: score
+          });
+        }
+
+      } else {
+        // EXACT SUBMARKET / CONDITION ID MODE
+        const marketMap = new Map();
+
+        for (const [addr, data] of cachedWalletPositionsMap.entries()) {
+          const wInfo = data.walletInfo;
+          for (const pos of data.positions) {
+            const marketTitle = pos.title || 'Untitled Market';
+            const mKey = pos.conditionId || marketTitle;
+            const outcomeName = pos.outcome || 'Yes';
+
+            if (!marketMap.has(mKey)) {
+              marketMap.set(mKey, {
+                title: marketTitle,
+                slug: pos.slug || '',
+                eventSlug: pos.eventSlug || pos.slug || '',
+                conditionId: pos.conditionId || '',
+                icon: pos.icon || '',
+                endDate: pos.endDate || '',
+                curPrice: parseFloat(pos.curPrice || 0),
+                outcomes: {}
+              });
+            }
+
+            const mEntry = marketMap.get(mKey);
+            if (!mEntry.outcomes[outcomeName]) {
+              mEntry.outcomes[outcomeName] = [];
+            }
+
+            mEntry.outcomes[outcomeName].push({
+              wallet: wInfo.wallet,
+              name: wInfo.name || null,
+              lifetimePnl: wInfo.lifetimePnl || 0,
+              lifetimeWinRate: wInfo.lifetimeWinRate || 0,
+              isBot: !!wInfo.isBot,
+              isStarred: !!wInfo.isStarred,
+              size: parseFloat(pos.size || 0),
+              avgPrice: parseFloat(pos.avgPrice || 0),
+              curPrice: parseFloat(pos.curPrice || 0),
+              initialValue: parseFloat(pos.initialValue || 0),
+              currentValue: parseFloat(pos.currentValue || 0),
+              cashPnl: parseFloat(pos.cashPnl || 0),
+              linesTaken: [`${outcomeName} ($${Math.round(parseFloat(pos.initialValue || 0))})`]
+            });
+          }
+        }
+
+        for (const [mKey, mEntry] of marketMap.entries()) {
+          const allOutcomes = Object.keys(mEntry.outcomes);
+          const totalHoldersInMarket = allOutcomes.reduce((acc, out) => acc + mEntry.outcomes[out].length, 0);
+
+          for (const outName of allOutcomes) {
+            const rawHolders = mEntry.outcomes[outName];
+            const holderCount = rawHolders.length;
+            const totalCapital = rawHolders.reduce((sum, h) => sum + h.initialValue, 0);
+            const totalCurValue = rawHolders.reduce((sum, h) => sum + h.currentValue, 0);
+            const avgWinRate = rawHolders.reduce((sum, h) => sum + h.lifetimeWinRate, 0) / holderCount;
+            const avgPnl = rawHolders.reduce((sum, h) => sum + h.lifetimePnl, 0) / holderCount;
+            const consensusPct = (holderCount / totalHoldersInMarket) * 100.0;
+            const avgEntryPrice = rawHolders.reduce((sum, h) => sum + h.avgPrice, 0) / holderCount;
+            const currentPrice = rawHolders[0].curPrice || mEntry.curPrice || 0;
+
+            const opponents = allOutcomes.filter(o => o !== outName).flatMap(o => mEntry.outcomes[o]);
+            const opponentCount = opponents.length;
+
+            let signalType = "⚡ CONSENSUS";
+            let signalBadgeClass = "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
+            let score = holderCount * 10 + (consensusPct / 10) + (avgWinRate / 10);
+
+            if (holderCount >= 3 && consensusPct >= 75) {
+              signalType = "🔥 STRONG CONSENSUS";
+              signalBadgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold";
+              score += 25;
+            } else if (totalCapital >= 5000) {
+              signalType = "🐋 SMART WHALE BET";
+              signalBadgeClass = "bg-purple-500/10 text-purple-400 border-purple-500/20 font-bold";
+              score += 15;
+            } else if (avgWinRate >= 80 && holderCount >= 2) {
+              signalType = "🎯 SNIPER CONSENSUS";
+              signalBadgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-bold";
+              score += 20;
+            }
+
+            signals.push({
+              title: mEntry.title,
+              slug: mEntry.slug,
+              eventSlug: mEntry.eventSlug,
+              conditionId: mEntry.conditionId,
+              icon: mEntry.icon,
+              endDate: mEntry.endDate,
+              outcome: outName,
+              isLinked: false,
+              lines: [{ label: outName, count: holderCount, capital: totalCapital }],
+              lineCount: 1,
+              currentPrice: currentPrice,
+              avgEntryPrice: avgEntryPrice,
+              holders: rawHolders.map(h => ({ ...h, totalCapital: h.initialValue })),
+              holderCount: holderCount,
+              opponentCount: opponentCount,
+              consensusPct: consensusPct,
+              totalCapital: totalCapital,
+              totalCurValue: totalCurValue,
+              avgWinRate: avgWinRate,
+              avgPnl: avgPnl,
+              signalType: signalType,
+              signalBadgeClass: signalBadgeClass,
+              score: score
+            });
+          }
+        }
+      }
+
+      signals.sort((a, b) => (b.holderCount - a.holderCount) || (b.totalCapital - a.totalCapital));
+      consensusSignals = signals;
+
+      updateConsensusMetrics();
+      renderConsensusTable();
+    }
 
     async function startConsensusScan() {
       if (isConsensusScanning) return;
@@ -3357,129 +3753,15 @@
         const workers = Array.from({ length: concurrency }, () => fetchWorker());
         await Promise.all(workers);
 
-        // Step 3: Cross-Reference by Market and Group Outcomes
-        consensusProgressLabel.innerHTML = `<span>Cross-referencing active bets and computing consensus ratios...</span>`;
+        // Step 3: Compute Consensus Signals
+        consensusProgressLabel.innerHTML = `<span>Linking spread positions and computing consensus ratios...</span>`;
+        cachedWalletPositionsMap = walletPositionsMap;
 
-        const marketMap = new Map();
+        recomputeConsensusSignals();
 
-        for (const [addr, data] of walletPositionsMap.entries()) {
-          const wInfo = data.walletInfo;
-          for (const pos of data.positions) {
-            const marketTitle = pos.title || 'Untitled Market';
-            const mKey = pos.conditionId || marketTitle;
-            const outcomeName = pos.outcome || 'Yes';
-
-            if (!marketMap.has(mKey)) {
-              marketMap.set(mKey, {
-                title: marketTitle,
-                slug: pos.slug || '',
-                eventSlug: pos.eventSlug || pos.slug || '',
-                conditionId: pos.conditionId || '',
-                icon: pos.icon || '',
-                endDate: pos.endDate || '',
-                curPrice: parseFloat(pos.curPrice || 0),
-                outcomes: {}
-              });
-            }
-
-            const mEntry = marketMap.get(mKey);
-            if (!mEntry.outcomes[outcomeName]) {
-              mEntry.outcomes[outcomeName] = [];
-            }
-
-            mEntry.outcomes[outcomeName].push({
-              wallet: wInfo.wallet,
-              name: wInfo.name || null,
-              lifetimePnl: wInfo.lifetimePnl || 0,
-              lifetimeWinRate: wInfo.lifetimeWinRate || 0,
-              isBot: !!wInfo.isBot,
-              isStarred: !!wInfo.isStarred,
-              size: parseFloat(pos.size || 0),
-              avgPrice: parseFloat(pos.avgPrice || 0),
-              curPrice: parseFloat(pos.curPrice || 0),
-              initialValue: parseFloat(pos.initialValue || 0),
-              currentValue: parseFloat(pos.currentValue || 0),
-              cashPnl: parseFloat(pos.cashPnl || 0)
-            });
-          }
-        }
-
-        // Step 4: Calculate Consensus Signals
-        const signals = [];
-
-        for (const [mKey, mEntry] of marketMap.entries()) {
-          const allOutcomes = Object.keys(mEntry.outcomes);
-          const totalHoldersInMarket = allOutcomes.reduce((acc, out) => acc + mEntry.outcomes[out].length, 0);
-
-          for (const outName of allOutcomes) {
-            const holders = mEntry.outcomes[outName];
-            const holderCount = holders.length;
-            const totalCapital = holders.reduce((sum, h) => sum + h.initialValue, 0);
-            const totalCurValue = holders.reduce((sum, h) => sum + h.currentValue, 0);
-            const avgWinRate = holders.reduce((sum, h) => sum + h.lifetimeWinRate, 0) / holderCount;
-            const avgPnl = holders.reduce((sum, h) => sum + h.lifetimePnl, 0) / holderCount;
-            const consensusPct = (holderCount / totalHoldersInMarket) * 100.0;
-            const avgEntryPrice = holders.reduce((sum, h) => sum + h.avgPrice, 0) / holderCount;
-            const currentPrice = holders[0].curPrice || mEntry.curPrice || 0;
-
-            const opponents = allOutcomes.filter(o => o !== outName).flatMap(o => mEntry.outcomes[o]);
-            const opponentCount = opponents.length;
-
-            let signalType = "⚡ CONSENSUS";
-            let signalBadgeClass = "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
-            let score = holderCount * 10 + (consensusPct / 10) + (avgWinRate / 10);
-
-            if (holderCount >= 3 && consensusPct >= 75) {
-              signalType = "🔥 STRONG CONSENSUS";
-              signalBadgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold";
-              score += 25;
-            } else if (totalCapital >= 5000) {
-              signalType = "🐋 SMART WHALE BET";
-              signalBadgeClass = "bg-purple-500/10 text-purple-400 border-purple-500/20 font-bold";
-              score += 15;
-            } else if (avgWinRate >= 80 && holderCount >= 2) {
-              signalType = "🎯 SNIPER CONSENSUS";
-              signalBadgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-bold";
-              score += 20;
-            }
-
-            signals.push({
-              title: mEntry.title,
-              slug: mEntry.slug,
-              eventSlug: mEntry.eventSlug,
-              conditionId: mEntry.conditionId,
-              icon: mEntry.icon,
-              endDate: mEntry.endDate,
-              outcome: outName,
-              currentPrice: currentPrice,
-              avgEntryPrice: avgEntryPrice,
-              holders: holders,
-              holderCount: holderCount,
-              opponentCount: opponentCount,
-              consensusPct: consensusPct,
-              totalCapital: totalCapital,
-              totalCurValue: totalCurValue,
-              avgWinRate: avgWinRate,
-              avgPnl: avgPnl,
-              signalType: signalType,
-              signalBadgeClass: signalBadgeClass,
-              score: score
-            });
-          }
-        }
-
-        // Sort by most agreeing wallets, then total smart capital
-        signals.sort((a, b) => (b.holderCount - a.holderCount) || (b.totalCapital - a.totalCapital));
-
-        consensusSignals = signals;
-
-        // Step 5: Update KPI and Table
         consensusProgressBar.style.width = "100%";
         consensusProgressPct.textContent = "100%";
-        consensusProgressLabel.innerHTML = `<span class="text-cyan-400 font-semibold">✓ Completed scan! Found ${consensusSignals.length} active position signals across active markets.</span>`;
-
-        updateConsensusMetrics();
-        renderConsensusTable();
+        consensusProgressLabel.innerHTML = `<span class="text-cyan-400 font-semibold">✓ Completed scan! Found ${consensusSignals.length} smart-money signals across active markets.</span>`;
 
       } catch (err) {
         console.error("Consensus scan error:", err);
@@ -3498,12 +3780,14 @@
       const overlaps = consensusSignals.filter(s => s.holderCount >= 2);
       const strong = consensusSignals.filter(s => s.holderCount >= 3);
       const unanimous = consensusSignals.filter(s => s.opponentCount === 0 && s.holderCount >= 2);
+      const linkedSignals = consensusSignals.filter(s => s.isLinked && s.lineCount >= 2);
 
       if (kpiConsensusSignals) kpiConsensusSignals.textContent = overlaps.length.toLocaleString();
       if (kpiConsensusOverlapDesc) kpiConsensusOverlapDesc.textContent = `${totalSignals} active bets detected`;
 
       if (consensusSignalCountBadge) consensusSignalCountBadge.textContent = `${overlaps.length} Signals`;
       if (consensusPresetCountAll) consensusPresetCountAll.textContent = totalSignals.toLocaleString();
+      if (consensusPresetCountLinked) consensusPresetCountLinked.textContent = linkedSignals.length.toLocaleString();
       if (consensusPresetCountStrong) consensusPresetCountStrong.textContent = strong.length.toLocaleString();
       if (consensusPresetCountUnanimous) consensusPresetCountUnanimous.textContent = unanimous.length.toLocaleString();
       const sportsSignals = consensusSignals.filter(s => isSportsMarket(s));
@@ -3517,7 +3801,8 @@
       if (consensusSignals.length > 0) {
         const top = [...consensusSignals].sort((a, b) => (b.holderCount - a.holderCount) || (b.totalCapital - a.totalCapital))[0];
         if (kpiConsensusTopPick) {
-          kpiConsensusTopPick.textContent = `${top.outcome.toUpperCase()}: ${top.title}`;
+          const linkedSubTag = (top.isLinked && top.lineCount >= 2) ? ` (${top.lineCount} Linked Lines)` : '';
+          kpiConsensusTopPick.textContent = `${top.outcome.toUpperCase()}: ${top.title}${linkedSubTag}`;
           kpiConsensusTopPick.title = `${top.title} (${top.outcome})`;
         }
         if (kpiConsensusTopPickSub) {
@@ -3538,7 +3823,9 @@
       let filtered = [...consensusSignals];
 
       // Preset Tab
-      if (activeConsensusPreset === 'strong') {
+      if (activeConsensusPreset === 'linked') {
+        filtered = filtered.filter(s => s.isLinked && s.lineCount >= 2);
+      } else if (activeConsensusPreset === 'strong') {
         filtered = filtered.filter(s => s.holderCount >= 3);
       } else if (activeConsensusPreset === 'unanimous') {
         filtered = filtered.filter(s => s.opponentCount === 0 && s.holderCount >= 2);
@@ -3559,7 +3846,12 @@
       // Search Query
       const q = consensusSearchFilter.value.trim().toLowerCase();
       if (q) {
-        filtered = filtered.filter(s => s.title.toLowerCase().includes(q) || s.outcome.toLowerCase().includes(q));
+        filtered = filtered.filter(s => {
+          const inTitle = (s.title || '').toLowerCase().includes(q);
+          const inOutcome = (s.outcome || '').toLowerCase().includes(q);
+          const inLines = s.lines ? s.lines.some(l => l.label.toLowerCase().includes(q)) : false;
+          return inTitle || inOutcome || inLines;
+        });
       }
 
       // Sort
@@ -3605,17 +3897,31 @@
           const hName = h.name || shortAddr;
           const pnlText = h.cashPnl >= 0 ? `+$${h.cashPnl.toFixed(0)}` : `-$${Math.abs(h.cashPnl).toFixed(0)}`;
           const pnlColor = h.cashPnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
+          const linesTakenStr = (h.linesTaken && h.linesTaken.length > 0) ? h.linesTaken.join(', ') : '';
           return `
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-[10px] font-sans" title="${h.wallet} | Lifetime Win: ${h.lifetimeWinRate.toFixed(1)}% | Bet: $${h.initialValue.toFixed(0)}">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-[10px] font-sans" title="${h.wallet} | Lifetime Win: ${h.lifetimeWinRate.toFixed(1)}% | Bet: $${h.totalCapital.toFixed(0)}${linesTakenStr ? ' | ' + linesTakenStr : ''}">
               <span class="text-white font-semibold">${hName}</span>
               <span class="text-teal-400 font-bold">${h.lifetimeWinRate.toFixed(0)}%W</span>
-              <span class="text-slate-400">$${h.initialValue.toFixed(0)}</span>
-              <span class="${pnlColor} font-mono">${pnlText}</span>
+              <span class="text-slate-400">$${h.totalCapital.toFixed(0)}</span>
+              ${linesTakenStr ? `<span class="text-cyan-300 font-mono text-[9px] bg-slate-900 px-1 py-0.2 rounded border border-slate-800">${linesTakenStr}</span>` : `<span class="${pnlColor} font-mono">${pnlText}</span>`}
             </span>
           `;
         }).join(" ");
 
         const winRateColor = s.avgWinRate >= 80 ? 'text-emerald-400' : (s.avgWinRate >= 60 ? 'text-teal-400' : 'text-amber-400');
+
+        // Line Chips for Linked Spreads
+        let linesBreakdownHtml = '';
+        if (s.isLinked && s.lines && s.lines.length > 1) {
+          linesBreakdownHtml = `
+            <div class="flex flex-wrap gap-1 mt-1.5">
+              ${s.lines.map(l => {
+                const capFormatted = l.capital >= 1000 ? `$${(l.capital / 1000).toFixed(1)}k` : `$${Math.round(l.capital)}`;
+                return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/40 text-[10px] text-cyan-300 font-mono"><span class="font-bold">${l.label}</span><span class="text-slate-400 font-sans">(${capFormatted})</span></span>`;
+              }).join('')}
+            </div>
+          `;
+        }
 
         tr.innerHTML = `
           <td class="py-3 px-3 font-mono text-slate-500 text-center">${idx + 1}</td>
@@ -3626,11 +3932,13 @@
             <a href="${marketUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline font-semibold text-white text-xs block leading-snug">
               ${s.title}
             </a>
-            ${s.endDate ? `<span class="text-[10px] text-slate-500">Resolves: ${s.endDate}</span>` : ''}
+            ${linesBreakdownHtml}
+            ${s.endDate ? `<span class="text-[10px] text-slate-500 block mt-0.5">Resolves: ${s.endDate}</span>` : ''}
           </td>
           <td class="py-3 px-3 text-center">
             <div class="inline-flex flex-col items-center">
               <span class="px-2.5 py-0.5 text-[11px] font-bold rounded-lg border uppercase tracking-wider ${outcomeColor}">${s.outcome}</span>
+              ${s.isLinked && s.lineCount >= 2 ? `<span class="text-[9px] text-cyan-400/90 font-medium block mt-0.5">🔗 Linked (${s.lineCount} Lines)</span>` : ''}
               <span class="text-[10px] text-slate-400 font-mono mt-0.5">${oddsCents}¢ (${oddsCents}%)</span>
             </div>
           </td>
@@ -3678,20 +3986,23 @@
       }
 
       const headers = [
-        "Rank", "Signal_Type", "Market_Question", "Smart_Pick_Outcome", "Current_Price_Cents",
-        "Consensus_Pct", "Agreeing_Wallets_Count", "Opposing_Wallets_Count", "Total_Smart_Capital_USD",
-        "Holders_Avg_WinRate_Pct", "Holders_Wallets", "Market_URL"
+        "Rank", "Signal_Type", "Market_Question", "Smart_Pick_Outcome", "Is_Linked_Spreads", "Linked_Lines_Breakdown",
+        "Current_Price_Cents", "Consensus_Pct", "Agreeing_Wallets_Count", "Opposing_Wallets_Count",
+        "Total_Smart_Capital_USD", "Holders_Avg_WinRate_Pct", "Holders_Wallets", "Market_URL"
       ];
 
       const csvRows = [headers.join(",")];
       consensusSignals.forEach((s, idx) => {
-        const holderNames = s.holders.map(h => `${h.name || h.wallet}(${h.lifetimeWinRate.toFixed(0)}%W-$${h.initialValue.toFixed(0)})`).join("; ");
+        const holderNames = s.holders.map(h => `${h.name || h.wallet}(${h.lifetimeWinRate.toFixed(0)}%W-$${h.totalCapital.toFixed(0)}${h.linesTaken ? '-' + h.linesTaken.join('/') : ''})`).join("; ");
+        const linesBreakdownStr = s.lines ? s.lines.map(l => `${l.label}($${Math.round(l.capital)})`).join("; ") : s.outcome;
         const url = s.eventSlug ? `https://polymarket.com/event/${s.eventSlug}` : (s.slug ? `https://polymarket.com/event/${s.slug}` : '');
         const row = [
           idx + 1,
           `"${s.signalType}"`,
           `"${(s.title || '').replace(/"/g, '""')}"`,
           `"${s.outcome}"`,
+          s.isLinked && s.lineCount >= 2 ? "YES" : "NO",
+          `"${linesBreakdownStr.replace(/"/g, '""')}"`,
           (s.currentPrice * 100).toFixed(1),
           s.consensusPct.toFixed(1),
           s.holderCount,
@@ -3717,6 +4028,11 @@
     // Consensus Listeners
     if (startConsensusScanBtn) startConsensusScanBtn.addEventListener('click', startConsensusScan);
     if (consensusSearchFilter) consensusSearchFilter.addEventListener('input', renderConsensusTable);
+    if (consensusSpreadLinkMode) consensusSpreadLinkMode.addEventListener('change', () => {
+      if (cachedWalletPositionsMap && cachedWalletPositionsMap.size > 0) {
+        recomputeConsensusSignals();
+      }
+    });
     if (consensusMinHoldersFilter) consensusMinHoldersFilter.addEventListener('change', renderConsensusTable);
     if (consensusSortSelect) consensusSortSelect.addEventListener('change', renderConsensusTable);
     if (consensusExportCsvBtn) consensusExportCsvBtn.addEventListener('click', exportConsensusCsv);
