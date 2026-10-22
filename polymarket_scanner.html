@@ -50,24 +50,33 @@
     </div>
 
     <!-- MAIN APPLICATION MODE SWITCHER -->
-    <div class="flex items-center gap-3 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
       <button 
         id="modeBtnSingle" 
         type="button"
-        class="flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 transition cursor-pointer bg-indigo-600 text-white shadow-lg shadow-indigo-600/25"
+        class="flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer bg-indigo-600 text-white shadow-lg shadow-indigo-600/25"
       >
         <span class="text-base">🎯</span>
-        <span>Single Market Scanner</span>
-        <span class="text-[11px] font-normal opacity-80 hidden sm:inline">(Paste link & rank participants)</span>
+        <span>Single Market</span>
+        <span class="text-[10px] font-normal opacity-80 hidden lg:inline">(Paste link)</span>
       </button>
       <button 
         id="modeBtnWhales" 
         type="button"
-        class="flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60"
+        class="flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60"
       >
         <span class="text-base">🌊</span>
-        <span>12-Hour Whale Scanner</span>
-        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wide">Profitable Whales</span>
+        <span>12h Whale Scanner</span>
+        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wide hidden xl:inline">Whales</span>
+      </button>
+      <button 
+        id="modeBtnSaved" 
+        type="button"
+        class="flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60"
+      >
+        <span class="text-base">⭐</span>
+        <span>Previously Scanned Wallets</span>
+        <span id="savedWalletsCountBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">0</span>
       </button>
     </div>
 
@@ -283,6 +292,7 @@
           <table class="w-full text-left border-collapse text-xs">
             <thead class="sticky top-0 bg-slate-950/95 backdrop-blur-sm border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider z-10">
               <tr>
+                <th class="py-3 px-2 w-8 text-center">⭐</th>
                 <th class="py-3 px-3.5 w-12">#</th>
                 <th class="py-3 px-3.5 w-24">Type</th>
                 <th class="py-3 px-3.5 w-28">Status</th>
@@ -513,6 +523,7 @@
             <table class="w-full text-left border-collapse text-xs">
               <thead class="sticky top-0 bg-slate-950/95 backdrop-blur-sm border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider z-10">
                 <tr>
+                  <th class="py-3 px-2 w-8 text-center">⭐</th>
                   <th class="py-3 px-3.5 w-12">#</th>
                   <th class="py-3 px-3.5 w-24">Type</th>
                   <th class="py-3 px-3.5 w-28">Tier</th>
@@ -542,6 +553,173 @@
 
     </div>
     <!-- /whaleScannerSection -->
+
+    <!-- SECTION 3: PREVIOUSLY SCANNED WALLETS DATABASE -->
+    <div id="savedWalletsSection" class="hidden space-y-6">
+
+      <!-- Saved Wallets Header Card -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 font-bold text-sm">⭐</span>
+              <h2 class="text-xl font-bold text-white">Saved & Previously Scanned Wallets</h2>
+              <span id="savedTotalHeaderBadge" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">0 Wallets Stored</span>
+            </div>
+            <p class="text-sm text-slate-400 mt-1">
+              Every wallet scanned across <strong>Single Markets</strong> and <strong>Whale Scans</strong> is permanently saved here in your browser. Star your favorites so you never lose high win-rate snipers or profitable whales.
+            </p>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button id="savedExportCsvBtn" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+              Export Saved CSV
+            </button>
+            <button id="savedClearBtn" class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              Clear Database
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Top KPI Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+          <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-4">
+            <span class="text-xs text-slate-400 font-medium">Total Saved Wallets</span>
+            <div id="kpiSavedTotal" class="text-xl font-bold text-white mt-1">0</div>
+            <span id="kpiSavedSources" class="text-[11px] text-slate-500">Auto-saved from scans</span>
+          </div>
+
+          <div class="bg-amber-950/20 border border-amber-900/40 rounded-xl p-4">
+            <span class="text-xs text-amber-400 font-medium">⭐ Starred Favorites</span>
+            <div id="kpiSavedStarred" class="text-xl font-bold text-amber-300 mt-1">0</div>
+            <span class="text-[11px] text-amber-400/80">Your pinned wallets</span>
+          </div>
+
+          <div class="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-4">
+            <span class="text-xs text-emerald-400 font-medium">Profitable Wallets</span>
+            <div id="kpiSavedProfitable" class="text-xl font-bold text-emerald-400 mt-1">0</div>
+            <span id="kpiSavedProfitSum" class="text-[11px] text-emerald-300 font-mono">+$0.00 total profit</span>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-4">
+            <span class="text-xs text-slate-400 font-medium">Highest Win % Record</span>
+            <div id="kpiSavedTopWinRate" class="text-xl font-bold text-teal-300 mt-1">0.0%</div>
+            <span id="kpiSavedTopWinnerName" class="text-[11px] text-slate-400 font-mono truncate block">None yet</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Filters & Ranked Table Container -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+
+        <!-- Category Pills & Presets -->
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <button type="button" class="saved-preset-tab px-3.5 py-1.5 rounded-xl font-bold transition cursor-pointer bg-amber-500 text-slate-950 shadow-sm" data-preset="all">
+            All Saved (<span id="savedCountAll">0</span>)
+          </button>
+          <button type="button" class="saved-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="starred">
+            ⭐ Starred (<span id="savedCountStarred">0</span>)
+          </button>
+          <button type="button" class="saved-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="profitable">
+            🟢 Profitable (<span id="savedCountProfitable">0</span>)
+          </button>
+          <button type="button" class="saved-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="humans">
+            👤 Humans Only (<span id="savedCountHumans">0</span>)
+          </button>
+          <button type="button" class="saved-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="snipers">
+            🎯 Snipers (≥60% Win, 10+ mkts)
+          </button>
+          <button type="button" class="saved-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="whales">
+            🐋 Whales
+          </button>
+          <button type="button" class="saved-preset-tab px-3.5 py-1.5 rounded-xl font-semibold transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800" data-preset="bots">
+            🤖 Bots
+          </button>
+        </div>
+
+        <!-- Filter Controls Bar -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1 border-t border-slate-800/80">
+          <div class="relative flex-1 max-w-md">
+            <input 
+              type="text" 
+              id="savedSearchFilter" 
+              placeholder="Search by address (0x...) or username..." 
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 pl-9 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-amber-500"
+            />
+            <svg class="w-4 h-4 text-slate-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          </div>
+
+          <div class="flex items-center flex-wrap gap-2 text-xs">
+            <!-- Min Markets Filter -->
+            <div class="flex items-center gap-1.5 text-slate-300">
+              <span class="text-slate-500">Min Mkts:</span>
+              <select id="savedMinMarketsFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-500 font-mono">
+                <option value="0">Any</option>
+                <option value="5">≥ 5 markets</option>
+                <option value="10">≥ 10 markets</option>
+                <option value="25">≥ 25 markets</option>
+                <option value="50">≥ 50 markets</option>
+              </select>
+            </div>
+
+            <!-- Sort By -->
+            <div class="flex items-center gap-1.5 text-slate-300">
+              <span class="text-slate-500">Sort:</span>
+              <select id="savedSortSelect" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-500">
+                <option value="pnl_desc" selected>Highest Lifetime Profit ($)</option>
+                <option value="winrate_desc">Highest Lifetime Win %</option>
+                <option value="starred_first">⭐ Starred Favorites First</option>
+                <option value="positions_desc">Most Markets Traded</option>
+                <option value="avg_bet_desc">Highest Avg Bet Size ($)</option>
+                <option value="pnl_asc">Lowest Lifetime P&L ($)</option>
+                <option value="recent_desc">Recently Scanned First</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Banner & Showing Count -->
+        <div class="text-xs text-slate-400 bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
+          <div>
+            Showing persistent wallet database, ranked by <strong>Lifetime P&L & Win Rate</strong> across all past scans.
+          </div>
+          <span id="savedTableShowingCount" class="font-mono text-amber-400 font-semibold">Showing 0 of 0 wallets</span>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-x-auto max-h-[650px] overflow-y-auto rounded-xl border border-slate-800">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="sticky top-0 bg-slate-950/95 backdrop-blur-sm border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider z-10">
+              <tr>
+                <th class="py-3 px-2.5 w-10 text-center">⭐</th>
+                <th class="py-3 px-3 w-12">#</th>
+                <th class="py-3 px-3 w-24">Type</th>
+                <th class="py-3 px-3 w-24">Status</th>
+                <th class="py-3 px-3.5">Wallet / Trader</th>
+                <th class="py-3 px-3.5 text-right font-bold text-white">Lifetime P&L</th>
+                <th class="py-3 px-3.5 w-36">Lifetime Win %</th>
+                <th class="py-3 px-3.5">Record</th>
+                <th class="py-3 px-3.5">Avg Bet</th>
+                <th class="py-3 px-3.5">Discovered In</th>
+                <th class="py-3 px-3 text-center w-24">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="savedTableBody" class="divide-y divide-slate-800/60 font-mono">
+            </tbody>
+          </table>
+        </div>
+
+        <div class="text-[11px] text-slate-500 flex items-center justify-between pt-1">
+          <span>* Saved wallets persist permanently in browser storage. Click ⭐ to pin your favorite wallets to the top.</span>
+          <span>Click any wallet to visit profile on Polymarket, or 'Inspect' to see all historical bets.</span>
+        </div>
+
+      </div>
+
+    </div>
+    <!-- /savedWalletsSection -->
 
   </div>
   <!-- /max-w-6xl -->
@@ -699,22 +877,35 @@
     // App Mode Switching
     modeBtnSingle.addEventListener('click', () => switchAppMode('single'));
     modeBtnWhales.addEventListener('click', () => switchAppMode('whales'));
+    modeBtnSaved.addEventListener('click', () => switchAppMode('saved'));
 
     function switchAppMode(mode) {
       currentAppMode = mode;
       if (mode === 'single') {
         singleMarketSection.classList.remove('hidden');
         whaleScannerSection.classList.add('hidden');
-        modeBtnSingle.className = "flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 transition cursor-pointer bg-indigo-600 text-white shadow-lg shadow-indigo-600/25";
-        modeBtnWhales.className = "flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60";
-      } else {
+        savedWalletsSection.classList.add('hidden');
+        modeBtnSingle.className = "flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer bg-indigo-600 text-white shadow-lg shadow-indigo-600/25";
+        modeBtnWhales.className = "flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60";
+        modeBtnSaved.className = "flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60";
+      } else if (mode === 'whales') {
         singleMarketSection.classList.add('hidden');
         whaleScannerSection.classList.remove('hidden');
-        modeBtnWhales.className = "flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 transition cursor-pointer bg-emerald-600 text-white shadow-lg shadow-emerald-600/25";
-        modeBtnSingle.className = "flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60";
+        savedWalletsSection.classList.add('hidden');
+        modeBtnWhales.className = "flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer bg-emerald-600 text-white shadow-lg shadow-emerald-600/25";
+        modeBtnSingle.className = "flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60";
+        modeBtnSaved.className = "flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60";
         if (whaleWallets.length === 0 && !isWhaleScanning) {
           startWhaleScan();
         }
+      } else if (mode === 'saved') {
+        singleMarketSection.classList.add('hidden');
+        whaleScannerSection.classList.add('hidden');
+        savedWalletsSection.classList.remove('hidden');
+        modeBtnSaved.className = "flex-1 py-3 px-3.5 rounded-xl font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/25";
+        modeBtnSingle.className = "flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60";
+        modeBtnWhales.className = "flex-1 py-3 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60";
+        renderSavedTable();
       }
     }
 
@@ -1217,6 +1408,7 @@
             wObj.avgBetSize = avgBet;
             wObj.lifetimeCategory = ltPnl > 0.01 ? 'PROFITABLE' : (ltPnl < -0.01 ? 'UNPROFITABLE' : 'BREAKEVEN');
             wObj.isLifetimeLoaded = true;
+            upsertSavedWallet(wObj, currentMarket ? (currentMarket.question || currentEvent?.title || 'Single Market') : 'Single Market');
 
           } catch (err) {
             wObj.isBot = false;
@@ -1380,8 +1572,15 @@
         }
 
         const winRateColor = w.lifetimeWinRate >= 80 ? 'text-emerald-400' : (w.lifetimeWinRate >= 60 ? 'text-teal-400' : 'text-amber-400');
+        const isStarred = isWalletStarred(w.wallet);
+        const starIcon = isStarred ? '⭐' : '<span class="text-slate-600 hover:text-amber-400 text-sm">☆</span>';
 
         tr.innerHTML = `
+          <td class="py-3 px-2 text-center">
+            <button class="single-star-btn hover:scale-125 transition cursor-pointer" data-wallet="${w.wallet}" title="${isStarred ? 'Remove from saved favorites' : 'Save to favorite wallets'}">
+              ${starIcon}
+            </button>
+          </td>
           <td class="py-3 px-3.5 font-mono text-slate-500">${idx + 1}</td>
           <td class="py-3 px-3.5">
             ${botBadge}
@@ -1426,6 +1625,13 @@
           </td>
         `;
         tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll('.single-star-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleStarWallet(btn.dataset.wallet);
+        });
       });
 
       document.querySelectorAll('.inspect-btn').forEach(btn => {
@@ -1797,6 +2003,7 @@
               else if (w.volume_window >= 500) w.whaleTier = "🐟 Active Trader";
               else w.whaleTier = "🦐 Retail";
 
+              upsertSavedWallet(w, `12h Whale Scan (${w.whaleTier})`);
             } catch (e) {}
 
             enrichedDone++;
@@ -1937,8 +2144,15 @@
         const pnlSign = w.lifetimePnl > 0 ? '+' : (w.lifetimePnl < 0 ? '-' : '');
 
         const winRateColor = w.lifetimeWinRate >= 80 ? 'text-emerald-400' : (w.lifetimeWinRate >= 60 ? 'text-teal-400' : 'text-amber-400');
+        const isStarred = isWalletStarred(w.wallet);
+        const starIcon = isStarred ? '⭐' : '<span class="text-slate-600 hover:text-amber-400 text-sm">☆</span>';
 
         tr.innerHTML = `
+          <td class="py-3 px-2 text-center">
+            <button class="whale-star-btn hover:scale-125 transition cursor-pointer" data-wallet="${w.wallet}" title="${isStarred ? 'Remove from saved favorites' : 'Save to favorite wallets'}">
+              ${starIcon}
+            </button>
+          </td>
           <td class="py-3 px-3.5 font-mono text-slate-500">${idx + 1}</td>
           <td class="py-3 px-3.5">${botBadge}</td>
           <td class="py-3 px-3.5">
@@ -1974,6 +2188,13 @@
           </td>
         `;
         whaleTableBody.appendChild(tr);
+      });
+
+      whaleTableBody.querySelectorAll('.whale-star-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleStarWallet(btn.dataset.wallet);
+        });
       });
 
       document.querySelectorAll('.whale-inspect-btn').forEach(btn => {
@@ -2027,6 +2248,541 @@
       link.click();
       document.body.removeChild(link);
     }
+
+    // ==========================================
+    // SECTION 3: PREVIOUSLY SCANNED WALLETS MODULE
+    // ==========================================
+    const STORAGE_KEY_SAVED_WALLETS = 'polymarket_saved_wallets_v2';
+    const modeBtnSaved = document.getElementById('modeBtnSaved');
+    const savedWalletsSection = document.getElementById('savedWalletsSection');
+    const savedWalletsCountBadge = document.getElementById('savedWalletsCountBadge');
+
+    // Saved Wallets KPI DOM
+    const kpiSavedTotal = document.getElementById('kpiSavedTotal');
+    const kpiSavedStarred = document.getElementById('kpiSavedStarred');
+    const kpiSavedProfitable = document.getElementById('kpiSavedProfitable');
+    const kpiSavedProfitSum = document.getElementById('kpiSavedProfitSum');
+    const kpiSavedTopWinRate = document.getElementById('kpiSavedTopWinRate');
+    const kpiSavedTopWinnerName = document.getElementById('kpiSavedTopWinnerName');
+    const savedTotalHeaderBadge = document.getElementById('savedTotalHeaderBadge');
+
+    // Saved Wallets Filter & Preset DOM
+    const savedCountAll = document.getElementById('savedCountAll');
+    const savedCountStarred = document.getElementById('savedCountStarred');
+    const savedCountProfitable = document.getElementById('savedCountProfitable');
+    const savedCountHumans = document.getElementById('savedCountHumans');
+    const savedSearchFilter = document.getElementById('savedSearchFilter');
+    const savedMinMarketsFilter = document.getElementById('savedMinMarketsFilter');
+    const savedSortSelect = document.getElementById('savedSortSelect');
+    const savedTableShowingCount = document.getElementById('savedTableShowingCount');
+    const savedTableBody = document.getElementById('savedTableBody');
+    const savedExportCsvBtn = document.getElementById('savedExportCsvBtn');
+    const savedClearBtn = document.getElementById('savedClearBtn');
+
+    let activeSavedPreset = 'all';
+
+    // Initial Seed Data (from previous match scans)
+    const INITIAL_SEED_WALLETS = [
+      {
+        wallet: "0x1674ede0831483f2eb7b1d26dcf4314e70d6e771",
+        name: "M88888",
+        lifetimePnl: 11908.75,
+        lifetimeCategory: "PROFITABLE",
+        lifetimeWinRate: 43.75,
+        lifetimePositions: 16,
+        lifetimeWins: 7,
+        avgBetSize: 1544.21,
+        isBot: false,
+        botDetail: "Manual Human Trader",
+        whaleTier: "🐋 Mega Whale",
+        isStarred: true,
+        source: "FC Bayern vs Arsenal",
+        firstSeen: Date.now() - 86400000,
+        lastSeen: Date.now()
+      },
+      {
+        wallet: "0xa99962fb8a2f65ce13b6623ce45ec005457dc947",
+        name: null,
+        lifetimePnl: 322.94,
+        lifetimeCategory: "PROFITABLE",
+        lifetimeWinRate: 96.30,
+        lifetimePositions: 140,
+        lifetimeWins: 135,
+        avgBetSize: 189.95,
+        isBot: false,
+        botDetail: "Manual Human Trader",
+        whaleTier: "🐟 Active Trader",
+        isStarred: true,
+        source: "FC Bayern vs Arsenal",
+        firstSeen: Date.now() - 172800000,
+        lastSeen: Date.now()
+      },
+      {
+        wallet: "0x2e56ad7c6239925b2111600154ef272f40e39d59",
+        name: "lgg-123",
+        lifetimePnl: 295.83,
+        lifetimeCategory: "PROFITABLE",
+        lifetimeWinRate: 80.00,
+        lifetimePositions: 30,
+        lifetimeWins: 24,
+        avgBetSize: 191.77,
+        isBot: false,
+        botDetail: "Manual Human Trader",
+        whaleTier: "🐟 Active Trader",
+        isStarred: false,
+        source: "FC Bayern vs Arsenal",
+        firstSeen: Date.now() - 259200000,
+        lastSeen: Date.now()
+      },
+      {
+        wallet: "0x7629f6ad0358e3346ba771427c6d22820d4acdda",
+        name: "robindhood",
+        lifetimePnl: -304.39,
+        lifetimeCategory: "UNPROFITABLE",
+        lifetimeWinRate: 32.14,
+        lifetimePositions: 27,
+        lifetimeWins: 9,
+        avgBetSize: 207.85,
+        isBot: false,
+        botDetail: "Manual Human Trader",
+        whaleTier: "🐟 Active Trader",
+        isStarred: false,
+        source: "FC Bayern vs Arsenal",
+        firstSeen: Date.now() - 345600000,
+        lastSeen: Date.now()
+      },
+      {
+        wallet: "0xb6f27e7f65f2ca6483402c179ec346b1f6856ff5",
+        name: "Irregular Untenable Passport",
+        lifetimePnl: -3678.71,
+        lifetimeCategory: "UNPROFITABLE",
+        lifetimeWinRate: 69.44,
+        lifetimePositions: 376,
+        lifetimeWins: 261,
+        avgBetSize: 152.68,
+        isBot: false,
+        botDetail: "Manual Human Trader",
+        whaleTier: "🐬 Shark",
+        isStarred: false,
+        source: "FC Bayern vs Arsenal",
+        firstSeen: Date.now() - 432000000,
+        lastSeen: Date.now()
+      }
+    ];
+
+    function getSavedWalletsMap() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_SAVED_WALLETS);
+        if (!raw) {
+          const seedMap = {};
+          INITIAL_SEED_WALLETS.forEach(w => {
+            seedMap[w.wallet.toLowerCase()] = w;
+          });
+          localStorage.setItem(STORAGE_KEY_SAVED_WALLETS, JSON.stringify(seedMap));
+          return seedMap;
+        }
+        return JSON.parse(raw) || {};
+      } catch (e) {
+        console.error("Storage read error:", e);
+        return {};
+      }
+    }
+
+    function saveWalletsMap(map) {
+      try {
+        localStorage.setItem(STORAGE_KEY_SAVED_WALLETS, JSON.stringify(map));
+      } catch (e) {
+        console.error("Failed to save to localStorage:", e);
+      }
+    }
+
+    function isWalletStarred(walletAddr) {
+      if (!walletAddr) return false;
+      const map = getSavedWalletsMap();
+      const existing = map[walletAddr.toLowerCase()];
+      return !!(existing && existing.isStarred);
+    }
+
+    function toggleStarWallet(walletAddr) {
+      if (!walletAddr) return;
+      const addr = walletAddr.toLowerCase();
+      const map = getSavedWalletsMap();
+
+      if (map[addr]) {
+        map[addr].isStarred = !map[addr].isStarred;
+      } else {
+        const fromSingle = lifetimeWallets.find(w => w.wallet.toLowerCase() === addr);
+        const fromWhale = whaleWallets.find(w => w.wallet.toLowerCase() === addr);
+        const found = fromSingle || fromWhale;
+        if (found) {
+          map[addr] = {
+            wallet: found.wallet,
+            name: found.name || null,
+            lifetimePnl: found.lifetimePnl || 0,
+            lifetimeCategory: found.lifetimeCategory || (found.lifetimePnl > 0 ? 'PROFITABLE' : 'UNPROFITABLE'),
+            lifetimeWinRate: found.lifetimeWinRate || 0,
+            lifetimePositions: found.lifetimePositions || (found.trades_count || 1),
+            lifetimeWins: found.lifetimeWins || 0,
+            avgBetSize: found.avgBetSize || found.max_single_bet || 0,
+            isBot: !!found.isBot,
+            botDetail: found.botDetail || 'Manual Human Trader',
+            whaleTier: found.whaleTier || 'Trader',
+            isStarred: true,
+            source: currentMarket ? (currentMarket.question || currentEvent?.title || 'Single Market') : 'Whale Scan',
+            firstSeen: Date.now(),
+            lastSeen: Date.now()
+          };
+        } else {
+          map[addr] = {
+            wallet: walletAddr,
+            name: null,
+            lifetimePnl: 0,
+            lifetimeCategory: 'BREAKEVEN',
+            lifetimeWinRate: 0,
+            lifetimePositions: 1,
+            lifetimeWins: 0,
+            avgBetSize: 0,
+            isBot: false,
+            botDetail: 'Manual Human Trader',
+            whaleTier: 'Trader',
+            isStarred: true,
+            source: 'Manual Star',
+            firstSeen: Date.now(),
+            lastSeen: Date.now()
+          };
+        }
+      }
+      saveWalletsMap(map);
+      updateSavedBadges();
+
+      if (currentAppMode === 'saved') {
+        renderSavedTable();
+      } else if (currentAppMode === 'single') {
+        renderTable();
+      } else if (currentAppMode === 'whales') {
+        renderWhaleTable();
+      }
+    }
+
+    function upsertSavedWallet(w, sourceTitle) {
+      if (!w || !w.wallet) return;
+      const addr = w.wallet.toLowerCase();
+      const map = getSavedWalletsMap();
+      const existing = map[addr];
+
+      const isStarred = existing ? !!existing.isStarred : false;
+      const firstSeen = existing ? existing.firstSeen : Date.now();
+
+      map[addr] = {
+        wallet: w.wallet,
+        name: w.name || (existing ? existing.name : null),
+        lifetimePnl: (w.lifetimePnl !== undefined && !isNaN(w.lifetimePnl)) ? w.lifetimePnl : (existing ? existing.lifetimePnl : 0),
+        lifetimeCategory: w.lifetimeCategory || (w.lifetimePnl > 0.01 ? 'PROFITABLE' : (w.lifetimePnl < -0.01 ? 'UNPROFITABLE' : 'BREAKEVEN')),
+        lifetimeWinRate: (w.lifetimeWinRate !== undefined && !isNaN(w.lifetimeWinRate)) ? w.lifetimeWinRate : (existing ? existing.lifetimeWinRate : 0),
+        lifetimePositions: w.lifetimePositions || (existing ? existing.lifetimePositions : 1),
+        lifetimeWins: w.lifetimeWins !== undefined ? w.lifetimeWins : (existing ? existing.lifetimeWins : 0),
+        avgBetSize: w.avgBetSize || w.max_single_bet || (existing ? existing.avgBetSize : 0),
+        isBot: w.isBot !== undefined ? w.isBot : (existing ? existing.isBot : false),
+        botDetail: w.botDetail || (existing ? existing.botDetail : 'Manual Human Trader'),
+        whaleTier: w.whaleTier || (existing ? existing.whaleTier : 'Trader'),
+        isStarred: isStarred,
+        source: sourceTitle || (existing ? existing.source : 'Scanned Market'),
+        firstSeen: firstSeen,
+        lastSeen: Date.now()
+      };
+
+      saveWalletsMap(map);
+      updateSavedBadges();
+    }
+
+    function deleteSavedWallet(walletAddr) {
+      if (!walletAddr) return;
+      const map = getSavedWalletsMap();
+      delete map[walletAddr.toLowerCase()];
+      saveWalletsMap(map);
+      updateSavedBadges();
+      renderSavedTable();
+    }
+
+    function clearSavedDatabase() {
+      if (!confirm("Are you sure you want to clear your entire saved wallets database? This action cannot be undone.")) {
+        return;
+      }
+      localStorage.removeItem(STORAGE_KEY_SAVED_WALLETS);
+      updateSavedBadges();
+      renderSavedTable();
+    }
+
+    function updateSavedBadges() {
+      const map = getSavedWalletsMap();
+      const list = Object.values(map);
+
+      const total = list.length;
+      const starred = list.filter(w => w.isStarred).length;
+      const profitable = list.filter(w => w.lifetimePnl > 0.01).length;
+      const humans = list.filter(w => !w.isBot).length;
+
+      if (savedWalletsCountBadge) savedWalletsCountBadge.textContent = total.toLocaleString();
+      if (savedTotalHeaderBadge) savedTotalHeaderBadge.textContent = `${total.toLocaleString()} Wallets Stored`;
+      if (savedCountAll) savedCountAll.textContent = total.toLocaleString();
+      if (savedCountStarred) savedCountStarred.textContent = starred.toLocaleString();
+      if (savedCountProfitable) savedCountProfitable.textContent = profitable.toLocaleString();
+      if (savedCountHumans) savedCountHumans.textContent = humans.toLocaleString();
+
+      if (kpiSavedTotal) kpiSavedTotal.textContent = total.toLocaleString();
+      if (kpiSavedStarred) kpiSavedStarred.textContent = starred.toLocaleString();
+      if (kpiSavedProfitable) kpiSavedProfitable.textContent = `${profitable.toLocaleString()} (${total > 0 ? (profitable/total*100).toFixed(0) : 0}%)`;
+
+      const totalProfit = list.filter(w => w.lifetimePnl > 0.01).reduce((acc, w) => acc + w.lifetimePnl, 0);
+      if (kpiSavedProfitSum) kpiSavedProfitSum.textContent = `+$${totalProfit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} total profit`;
+
+      // Top win rate wallet (prefer min 10 markets)
+      const validForWin = list.filter(w => w.lifetimePositions >= 10);
+      if (validForWin.length > 0) {
+        validForWin.sort((a, b) => b.lifetimeWinRate - a.lifetimeWinRate);
+        const best = validForWin[0];
+        if (kpiSavedTopWinRate) kpiSavedTopWinRate.textContent = `${best.lifetimeWinRate.toFixed(1)}%`;
+        const bestName = best.name || `${best.wallet.slice(0, 6)}...${best.wallet.slice(-4)}`;
+        if (kpiSavedTopWinnerName) kpiSavedTopWinnerName.textContent = `${bestName} (${best.lifetimeWins}/${best.lifetimePositions} mkts)`;
+      } else if (list.length > 0) {
+        const best = [...list].sort((a, b) => b.lifetimeWinRate - a.lifetimeWinRate)[0];
+        if (kpiSavedTopWinRate) kpiSavedTopWinRate.textContent = `${best.lifetimeWinRate.toFixed(1)}%`;
+        const bestName = best.name || `${best.wallet.slice(0, 6)}...${best.wallet.slice(-4)}`;
+        if (kpiSavedTopWinnerName) kpiSavedTopWinnerName.textContent = `${bestName} (${best.lifetimeWins}/${best.lifetimePositions} mkts)`;
+      } else {
+        if (kpiSavedTopWinRate) kpiSavedTopWinRate.textContent = "0.0%";
+        if (kpiSavedTopWinnerName) kpiSavedTopWinnerName.textContent = "None yet";
+      }
+    }
+
+    function renderSavedTable() {
+      const map = getSavedWalletsMap();
+      let list = Object.values(map);
+
+      // Category Presets
+      if (activeSavedPreset === 'starred') {
+        list = list.filter(w => w.isStarred);
+      } else if (activeSavedPreset === 'profitable') {
+        list = list.filter(w => w.lifetimePnl > 0.01);
+      } else if (activeSavedPreset === 'humans') {
+        list = list.filter(w => !w.isBot);
+      } else if (activeSavedPreset === 'snipers') {
+        list = list.filter(w => w.lifetimeWinRate >= 60 && w.lifetimePositions >= 10);
+      } else if (activeSavedPreset === 'whales') {
+        list = list.filter(w => (w.avgBetSize >= 1000 || w.lifetimePnl >= 10000 || (w.whaleTier && w.whaleTier.includes('Whale'))));
+      } else if (activeSavedPreset === 'bots') {
+        list = list.filter(w => w.isBot);
+      }
+
+      // Min Markets filter
+      const minMkts = parseInt(savedMinMarketsFilter.value, 10) || 0;
+      if (minMkts > 0) {
+        list = list.filter(w => w.lifetimePositions >= minMkts);
+      }
+
+      // Search query filter
+      const q = savedSearchFilter.value.trim().toLowerCase();
+      if (q) {
+        list = list.filter(w => w.wallet.toLowerCase().includes(q) || (w.name && w.name.toLowerCase().includes(q)));
+      }
+
+      // Sorting
+      const sortBy = savedSortSelect.value;
+      if (sortBy === 'pnl_desc') {
+        list.sort((a, b) => b.lifetimePnl - a.lifetimePnl);
+      } else if (sortBy === 'pnl_asc') {
+        list.sort((a, b) => a.lifetimePnl - b.lifetimePnl);
+      } else if (sortBy === 'winrate_desc') {
+        list.sort((a, b) => (b.lifetimeWinRate - a.lifetimeWinRate) || (b.lifetimePositions - a.lifetimePositions));
+      } else if (sortBy === 'starred_first') {
+        list.sort((a, b) => {
+          if (b.isStarred !== a.isStarred) return b.isStarred ? 1 : -1;
+          return b.lifetimePnl - a.lifetimePnl;
+        });
+      } else if (sortBy === 'positions_desc') {
+        list.sort((a, b) => b.lifetimePositions - a.lifetimePositions);
+      } else if (sortBy === 'avg_bet_desc') {
+        list.sort((a, b) => b.avgBetSize - a.avgBetSize);
+      } else if (sortBy === 'recent_desc') {
+        list.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+      }
+
+      const totalInMap = Object.keys(map).length;
+      savedTableShowingCount.textContent = `Showing ${list.length.toLocaleString()} of ${totalInMap.toLocaleString()} wallets`;
+
+      savedTableBody.innerHTML = '';
+      if (list.length === 0) {
+        savedTableBody.innerHTML = `<tr><td colspan="11" class="text-center py-12 text-slate-500 font-sans">No saved wallets found matching this filter.</td></tr>`;
+        return;
+      }
+
+      list.forEach((w, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-800/40 transition";
+
+        const botBadge = w.isBot 
+          ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20" title="${w.botDetail || 'Automated trading bot'}">🤖 BOT</span>`
+          : `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-800 text-slate-300 border border-slate-700" title="Manual Human Trader">👤 NO BOT</span>`;
+
+        const pnlColor = w.lifetimePnl > 0 ? 'text-emerald-400' : (w.lifetimePnl < 0 ? 'text-rose-400' : 'text-slate-400');
+        const pnlSign = w.lifetimePnl > 0 ? '+' : (w.lifetimePnl < 0 ? '-' : '');
+
+        const badgeColor = w.lifetimeCategory === 'PROFITABLE' 
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+          : (w.lifetimeCategory === 'UNPROFITABLE' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-slate-800 text-slate-400 border-slate-700');
+
+        const shortAddr = `${w.wallet.slice(0, 6)}...${w.wallet.slice(-4)}`;
+        const displayName = w.name ? `<span class="text-slate-100 font-semibold">${w.name}</span> <span class="text-slate-500 text-[10px]">(${shortAddr})</span>` : `<span class="text-slate-300">${shortAddr}</span>`;
+
+        const winRateColor = w.lifetimeWinRate >= 80 ? 'text-emerald-400' : (w.lifetimeWinRate >= 60 ? 'text-teal-400' : 'text-amber-400');
+
+        const starIcon = w.isStarred ? '⭐' : '<span class="text-slate-600 hover:text-amber-400 text-sm">☆</span>';
+
+        const sourceText = w.source ? (w.source.length > 25 ? `${w.source.slice(0, 25)}...` : w.source) : 'Market Scan';
+
+        tr.innerHTML = `
+          <td class="py-3 px-2.5 text-center">
+            <button class="saved-star-btn hover:scale-125 transition cursor-pointer" data-wallet="${w.wallet}" title="${w.isStarred ? 'Unfavorite wallet' : 'Star favorite wallet'}">
+              ${starIcon}
+            </button>
+          </td>
+          <td class="py-3 px-3 font-mono text-slate-500">${idx + 1}</td>
+          <td class="py-3 px-3">${botBadge}</td>
+          <td class="py-3 px-3">
+            <span class="inline-block px-2 py-0.5 text-[10px] font-bold rounded border ${badgeColor}">${w.lifetimeCategory}</span>
+          </td>
+          <td class="py-3 px-3.5">
+            <a href="https://polymarket.com/profile/${w.wallet}" target="_blank" rel="noopener noreferrer" class="hover:underline flex items-center gap-1 text-xs">
+              ${displayName}
+              <svg class="w-3 h-3 text-slate-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+            </a>
+          </td>
+          <td class="py-3 px-3.5 text-right font-bold text-sm ${pnlColor}">
+            ${pnlSign}$${Math.abs(w.lifetimePnl).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+          </td>
+          <td class="py-3 px-3.5">
+            <div class="flex items-center gap-2">
+              <span class="font-bold ${winRateColor}">${w.lifetimeWinRate.toFixed(1)}%</span>
+              <div class="w-12 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-emerald-400 h-full rounded-full" style="width: ${Math.min(100, w.lifetimeWinRate)}%"></div>
+              </div>
+            </div>
+          </td>
+          <td class="py-3 px-3.5 text-slate-300">
+            <span class="font-bold text-white">${w.lifetimeWins}</span><span class="text-slate-500"> / ${w.lifetimePositions} mkts</span>
+          </td>
+          <td class="py-3 px-3.5 text-slate-300">
+            <span>$${w.avgBetSize.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+          </td>
+          <td class="py-3 px-3.5 text-slate-400 text-[11px]" title="${w.source || ''}">
+            ${sourceText}
+          </td>
+          <td class="py-3 px-3 text-center">
+            <div class="flex items-center justify-center gap-1.5">
+              <button class="saved-inspect-btn px-2 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 text-[11px] font-semibold transition cursor-pointer" data-wallet="${w.wallet}" data-name="${w.name || shortAddr}">
+                Inspect
+              </button>
+              <button class="saved-delete-btn p-1 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition cursor-pointer" data-wallet="${w.wallet}" title="Delete from saved list">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </div>
+          </td>
+        `;
+
+        savedTableBody.appendChild(tr);
+      });
+
+      // Attach event listeners for saved table
+      savedTableBody.querySelectorAll('.saved-inspect-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          openTraderInspector(btn.dataset.wallet, btn.dataset.name);
+        });
+      });
+
+      savedTableBody.querySelectorAll('.saved-star-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleStarWallet(btn.dataset.wallet);
+        });
+      });
+
+      savedTableBody.querySelectorAll('.saved-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteSavedWallet(btn.dataset.wallet);
+        });
+      });
+    }
+
+    function exportSavedCsv() {
+      const map = getSavedWalletsMap();
+      const list = Object.values(map);
+      if (list.length === 0) {
+        alert("No saved wallets to export!");
+        return;
+      }
+      list.sort((a, b) => b.lifetimePnl - a.lifetimePnl);
+
+      const headers = [
+        "Rank", "Starred", "Trader_Type", "Bot_Signals", "Lifetime_Category",
+        "Wallet", "Username", "Lifetime_PnL_USD", "Lifetime_WinRate_Pct",
+        "Lifetime_Wins", "Lifetime_Total_Markets", "Avg_Bet_Size_USD", "Discovered_In", "Date_Added"
+      ];
+
+      const csvRows = [headers.join(",")];
+      list.forEach((w, i) => {
+        const row = [
+          i + 1,
+          w.isStarred ? "YES" : "NO",
+          w.isBot ? "BOT" : "NO BOT",
+          `"${(w.botDetail || '').replace(/"/g, '""')}"`,
+          w.lifetimeCategory || (w.lifetimePnl > 0 ? "PROFITABLE" : "UNPROFITABLE"),
+          w.wallet,
+          `"${(w.name || '').replace(/"/g, '""')}"`,
+          w.lifetimePnl.toFixed(4),
+          w.lifetimeWinRate.toFixed(2),
+          w.lifetimeWins,
+          w.lifetimePositions,
+          w.avgBetSize.toFixed(2),
+          `"${(w.source || '').replace(/"/g, '""')}"`,
+          w.firstSeen ? new Date(w.firstSeen).toISOString() : ""
+        ];
+        csvRows.push(row.join(","));
+      });
+
+      const csvContent = "data:text/csv;charset=utf-8," + csvRows.join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `polymarket_saved_wallets_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Saved Presets listener
+    document.querySelectorAll('.saved-preset-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.saved-preset-tab').forEach(t => {
+          t.classList.remove('bg-amber-500', 'text-slate-950', 'font-bold');
+          t.classList.add('text-slate-400', 'font-semibold');
+        });
+        tab.classList.remove('text-slate-400', 'font-semibold');
+        tab.classList.add('bg-amber-500', 'text-slate-950', 'font-bold');
+        activeSavedPreset = tab.dataset.preset || 'all';
+        renderSavedTable();
+      });
+    });
+
+    // Saved filter controls
+    if (savedSearchFilter) savedSearchFilter.addEventListener('input', renderSavedTable);
+    if (savedMinMarketsFilter) savedMinMarketsFilter.addEventListener('change', renderSavedTable);
+    if (savedSortSelect) savedSortSelect.addEventListener('change', renderSavedTable);
+    if (savedExportCsvBtn) savedExportCsvBtn.addEventListener('click', exportSavedCsv);
+    if (savedClearBtn) savedClearBtn.addEventListener('click', clearSavedDatabase);
+
+    // Initialize saved badges on page load
+    updateSavedBadges();
   </script>
 </body>
 </html>
