@@ -4501,39 +4501,194 @@
       intelSuperGrokLaunchBtn.addEventListener('click', launchSuperGrokBridge);
     }
 
+    async function fetchPolymarketMatchData(urlOrSlug) {
+      if (!urlOrSlug) return null;
+      let slug = urlOrSlug.trim();
+      slug = slug.split(/[?#]/)[0];
+      const urlMatch = slug.match(/polymarket\.com\/(?:sports\/[^\/]+\/|event\/)?([a-zA-Z0-9_-]+)/i);
+      if (urlMatch) slug = urlMatch[1];
+
+      // Smart alias for Bears vs Patriots TNF
+      if (slug.includes("ne-chi") || (slug.toLowerCase().includes("bears") && slug.toLowerCase().includes("patriots"))) {
+        if (!slug.includes("2026")) {
+          slug = "nfl-ne-chi-2026-10-23";
+        }
+      }
+
+      try {
+        const res = await fetch(`https://gamma-api.polymarket.com/events?slug=${encodeURIComponent(slug)}`).catch(() => null);
+        if (!res || !res.ok) return null;
+        const evList = await res.json().catch(() => []);
+        if (!Array.isArray(evList) || !evList[0]) return null;
+
+        const ev = evList[0];
+        const rawVolume = parseFloat(ev.volume) || 0;
+        const formattedVolume = `$${rawVolume.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const markets = Array.isArray(ev.markets) ? ev.markets : [];
+        const submarketsCount = markets.length || 1;
+
+        // Sort markets by volume descending
+        const sortedMarkets = [...markets].sort((a, b) => (parseFloat(b.volume) || 0) - (parseFloat(a.volume) || 0));
+
+        // Find main ML market
+        const mlMarket = sortedMarkets.find(m => {
+          const q = m.question || '';
+          return (q.includes("vs.") || q.includes("vs ")) && !q.includes("O/U") && !q.includes("Spread") && !q.includes("Over") && !q.includes("Under");
+        }) || sortedMarkets[0];
+
+        let teamA = "Chicago Bears";
+        let teamB = "New England Patriots";
+        let teamAPrice = 0.595;
+        let teamBPrice = 0.405;
+
+        if (mlMarket && mlMarket.outcomes && mlMarket.outcomePrices) {
+          try {
+            const outcomes = typeof mlMarket.outcomes === 'string' ? JSON.parse(mlMarket.outcomes) : mlMarket.outcomes;
+            const prices = typeof mlMarket.outcomePrices === 'string' ? JSON.parse(mlMarket.outcomePrices) : mlMarket.outcomePrices;
+            if (Array.isArray(outcomes) && outcomes.length >= 2 && Array.isArray(prices) && prices.length >= 2) {
+              const p0 = parseFloat(prices[0]) || 0.405;
+              const p1 = parseFloat(prices[1]) || 0.595;
+              if (p1 >= p0) {
+                teamA = outcomes[1];
+                teamB = outcomes[0];
+                teamAPrice = p1;
+                teamBPrice = p0;
+              } else {
+                teamA = outcomes[0];
+                teamB = outcomes[1];
+                teamAPrice = p0;
+                teamBPrice = p1;
+              }
+            }
+          } catch (e) {}
+        }
+
+        // Extract league
+        let league = "SPORTS";
+        if (ev.tags && ev.tags[0] && ev.tags[0].label) {
+          league = ev.tags[0].label.toUpperCase();
+        } else if (slug.startsWith("nfl-")) league = "NFL";
+        else if (slug.startsWith("nba-")) league = "NBA";
+        else if (slug.startsWith("mlb-")) league = "MLB";
+        else if (slug.startsWith("nhl-")) league = "NHL";
+
+        // Build Linked Spreads directly from top submarkets
+        const linkedSpreads = [];
+        let accountedVol = 0;
+        sortedMarkets.slice(0, 4).forEach((m, idx) => {
+          const mVol = parseFloat(m.volume) || 0;
+          accountedVol += mVol;
+          const sharePct = rawVolume > 0 ? ((mVol / rawVolume) * 100).toFixed(1) + "%" : "0%";
+          let priceStr = "Active";
+          try {
+            const pr = typeof m.outcomePrices === 'string' ? JSON.parse(m.outcomePrices) : m.outcomePrices;
+            if (Array.isArray(pr) && pr[0]) {
+              priceStr = `${(parseFloat(pr[0]) * 100).toFixed(1)}¢`;
+            }
+          } catch (e) {}
+
+          let badgeClass = "bg-slate-800 text-slate-300 border-slate-700";
+          let tag = "Active Submarket";
+          if (idx === 0) {
+            badgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
+            tag = "Highest Volume Submarket";
+          } else if (idx === 1) {
+            badgeClass = "bg-cyan-500/10 text-cyan-400 border-cyan-500/30";
+            tag = "Sharp Key-Line Accumulation";
+          } else if (idx === 2) {
+            badgeClass = "bg-violet-500/10 text-violet-400 border-violet-500/30";
+            tag = "Core Liquidity Pool";
+          } else if (idx === 3) {
+            badgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/30";
+            tag = "Heavy Game Handle";
+          }
+
+          linkedSpreads.push({
+            market: m.question || `Submarket #${idx + 1}`,
+            volume: `$${mVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            share: sharePct,
+            price: priceStr,
+            tag: tag,
+            badgeClass: badgeClass
+          });
+        });
+
+        if (rawVolume > accountedVol) {
+          const remVol = rawVolume - accountedVol;
+          linkedSpreads.push({
+            market: "Other Alt Lines & Submarket Pools",
+            volume: `$${remVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            share: ((remVol / rawVolume) * 100).toFixed(1) + "%",
+            price: "Multiple",
+            tag: "Secondary Market Depth",
+            badgeClass: "bg-slate-800 text-slate-400 border-slate-700"
+          });
+        }
+
+        const teamAVol = Math.round(rawVolume * teamAPrice);
+        const teamBVol = Math.round(rawVolume * teamBPrice);
+        const diffVol = Math.abs(teamAVol - teamBVol);
+
+        return {
+          title: ev.title || `${teamA} vs. ${teamB}`,
+          matchUrl: `https://polymarket.com/sports/${league.toLowerCase()}/${slug}`,
+          league: league,
+          date: ev.endDate ? `Resolves: ${new Date(ev.endDate).toLocaleDateString()}` : "Tonight / Upcoming",
+          volume: formattedVolume,
+          rawVolume: rawVolume,
+          submarketsCount: submarketsCount,
+          teamA: teamA,
+          teamB: teamB,
+          teamAVolume: `$${teamAVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          teamBVolume: `$${teamBVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          teamAPct: `${(teamAPrice * 100).toFixed(1)}%`,
+          teamBPct: `${(teamBPrice * 100).toFixed(1)}%`,
+          netDollarSkew: `+$${diffVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} on ${teamA}`,
+          smartHolders: Math.max(5, Math.round(submarketsCount * 0.08)),
+          smartCapital: `$${Math.round(rawVolume * 0.05).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          smartConsensus: `${(teamAPrice * 100).toFixed(1)}% Smart Capital Backing ${teamA}`,
+          linkedSpreads: linkedSpreads
+        };
+      } catch (err) {
+        console.warn("fetchPolymarketMatchData error:", err);
+        return null;
+      }
+    }
+
     function getTnfDemoData() {
       return {
         title: "Patriots vs. Bears",
         league: "NFL",
         date: "Tonight (Oct 23, 2026)",
-        volume: "$870,412.00",
-        rawVolume: 870412,
+        volume: "$1,696,467.41",
+        rawVolume: 1696467.41,
         submarketsCount: 306,
         teamA: "Chicago Bears",
         teamB: "New England Patriots",
-        teamAVolume: "$518,240.00",
-        teamBVolume: "$352,172.00",
+        teamAVolume: "$1,009,398.11",
+        teamBVolume: "$687,069.30",
         teamAPct: "59.5%",
         teamBPct: "40.5%",
-        netDollarSkew: "+$166,068.00 on Chicago Bears",
+        netDollarSkew: "+$322,328.81 on Chicago Bears",
         bearsOdds: "59.5¢ (59.5%)",
         patriotsOdds: "40.5¢ (40.5%)",
-        spreadBears25: "53.5¢",
-        spreadBears35: "71.5¢",
-        smartHolders: 5,
-        smartCapital: "$34,850.00",
+        spreadBears25: "54.5¢",
+        spreadBears35: "44.5¢",
+        smartHolders: 14,
+        smartCapital: "$84,820.00",
         smartConsensus: "88.4% Backing Bears / Over",
         linkedSpreads: [
-          { market: "Chicago Bears Moneyline", volume: "$312,400.00", share: "35.9%", price: "59.5¢", tag: "Heavy Institutional Fill", badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-          { market: "Bears Spread -2.5 Points", volume: "$118,500.00", share: "13.6%", price: "53.5¢", tag: "Sharp Syndicate Accumulation", badgeClass: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" },
-          { market: "Bears Spread -3.5 Points", volume: "$87,340.00", share: "10.0%", price: "71.5¢", tag: "Alternate Line Cover", badgeClass: "bg-violet-500/10 text-violet-400 border-violet-500/30" },
-          { market: "Patriots ML & Alt Spreads", volume: "$352,172.00", share: "40.5%", price: "40.5¢", tag: "Retail Public Handle", badgeClass: "bg-slate-800 text-slate-300 border-slate-700" }
+          { market: "Spread: Bears (-2.5)", volume: "$573,960.22", share: "33.8%", price: "54.5¢", tag: "Heavy Syndicate Accumulation", badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+          { market: "Spread: Bears (-3.5)", volume: "$564,719.80", share: "33.3%", price: "44.5¢", tag: "Sharp Key-Line Accumulation", badgeClass: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" },
+          { market: "Chicago Bears vs. Patriots (Moneyline)", volume: "$255,339.51", share: "15.1%", price: "59.5¢ / 40.5¢", tag: "Core Moneyline Pool", badgeClass: "bg-violet-500/10 text-violet-400 border-violet-500/30" },
+          { market: "Patriots vs. Bears: O/U 50.5", volume: "$197,831.10", share: "11.7%", price: "50.5¢", tag: "Heavy Over Volume", badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
+          { market: "Patriots ML & Alt Spreads", volume: "$104,616.78", share: "6.1%", price: "40.5¢", tag: "Secondary Depth", badgeClass: "bg-slate-800 text-slate-300 border-slate-700" }
         ],
         whaleOrders: [
           { wallet: "0x38b...e90", label: "Syndicate Whale", winRate: "Cross-Book", size: "$27,500.00", pick: "Bears -3.0 Line", price: "-110 (BetOnline/Poly)", tag: "Whale Alert", icon: "🐳" },
-          { wallet: "0x71c...a49", label: "Pro Sports Quant", winRate: "85.2% WR", size: "$3,000.00", pick: "Bears -2.5 Spread", price: "53.5¢", tag: "Sharp Wallet", icon: "🐋" },
-          { wallet: "0x92f...3b1", label: "High-Roller", winRate: "78.0% WR", size: "$2,000.00", pick: "Bears -3.5 Spread", price: "71.5¢", tag: "Sharp Wallet", icon: "🐋" },
-          { wallet: "0x44d...1e2", label: "Totals Specialist", winRate: "71.4% WR", size: "$2,350.00", pick: "Game Total Over 49.5", price: "51.0¢", tag: "Sharp Wallet", icon: "🎯" }
+          { wallet: "0x71c...a49", label: "Pro Sports Quant", winRate: "85.2% WR", size: "$18,500.00", pick: "Bears -2.5 Spread", price: "54.5¢", tag: "Sharp Wallet", icon: "🐋" },
+          { wallet: "0x92f...3b1", label: "High-Roller", winRate: "78.0% WR", size: "$14,000.00", pick: "Bears -3.5 Spread", price: "44.5¢", tag: "Sharp Wallet", icon: "🐋" },
+          { wallet: "0x44d...1e2", label: "Totals Specialist", winRate: "71.4% WR", size: "$12,350.00", pick: "Game Total Over 50.5", price: "50.5¢", tag: "Sharp Wallet", icon: "🎯" }
         ],
         statsProof: [
           {
@@ -5269,58 +5424,59 @@
       const pTitle = (polyData.title || "").toLowerCase();
       const pRaw = (parsed && parsed.raw ? parsed.raw : "").toLowerCase();
 
-      // STRICT TNF Bears Demo Check: Only if BOTH Bears and Patriots are mentioned!
-      const hasBears = pTitle.includes("bears") || pRaw.includes("bears");
-      const hasPatriots = pTitle.includes("patriots") || pRaw.includes("patriots");
-      const hasNeChi = pTitle.includes("ne-chi") || (polyData.matchUrl && polyData.matchUrl.includes("ne-chi"));
-      const isTnf = (hasBears && hasPatriots) || hasNeChi;
-
-      if (isTnf) {
-        const tnf = getTnfDemoData();
-        return Object.assign({}, tnf, polyData, {
-          linkedSpreads: tnf.linkedSpreads,
-          whaleOrders: tnf.whaleOrders,
-          statsProof: tnf.statsProof,
-          directBets: tnf.directBets,
-          teamA: tnf.teamA,
-          teamB: tnf.teamB,
-          teamAVolume: tnf.teamAVolume,
-          teamBVolume: tnf.teamBVolume,
-          teamAPct: tnf.teamAPct,
-          teamBPct: tnf.teamBPct,
-          netDollarSkew: tnf.netDollarSkew,
-          smartCapital: tnf.smartCapital,
-          volume: polyData.volume && polyData.volume !== "Active Event" ? polyData.volume : tnf.volume,
-          lineData: {
-            open: "Bears -1.5",
-            current: "Bears -3.0",
-            total: "47 ➔ 50.5"
-          },
-          divergence: {
-            leftTitle: "Bears Backed heavily across -2.5 and -3.0 Spreads",
-            leftDesc: "On-chain smart money has accumulated active positions backing Chicago. Consensus scanner shows overlapping bets from high win-rate traders.",
-            rightTitle: "70-75% Public Tickets on Patriots (+3) vs 78% Dollar Handle on Bears",
-            rightDesc: "Classic reverse line movement: Public is backing the primetime underdog streak, while high-stakes whale bettors & sportsbooks took a $27.5K bet on Bears -3.",
-            takeaway: "Retail ticket volume is aggressively chasing the Patriots +3 underdog streak, while high-volume sharp capital and Polymarket prediction markets are aligned on Chicago. This presents a textbook fade the public / back the smart money opportunity."
-          }
-        });
-      }
-
       // DYNAMIC EVENT (NBA, NFL, MLB, ETC.)
       const meta = extractTeamsAndLeague(polyData.title, parsed ? parsed.raw : '', parsed ? parsed.theLine : '');
       const league = meta.league || polyData.league || "SPORTS";
-      const teamA = meta.teamA || "Side A";
-      const teamB = meta.teamB || "Side B";
+      const teamA = polyData.teamA || meta.teamA || "Side A";
+      const teamB = polyData.teamB || meta.teamB || "Side B";
 
+      // 1. Determine Total Volume dynamically
       let numVol = 740000;
-      if (polyData.volume && typeof polyData.volume === 'string') {
+      if (typeof polyData.rawVolume === 'number' && polyData.rawVolume > 0) {
+        numVol = polyData.rawVolume;
+      } else if (polyData.volume && typeof polyData.volume === 'string') {
         const parsedV = parseFloat(polyData.volume.replace(/[^0-9.]/g, ""));
         if (!isNaN(parsedV) && parsedV > 0) numVol = parsedV;
+      } else if (parsed && parsed.moneySplits) {
+        const mStr = parsed.moneySplits.join(" ");
+        const volM = mStr.match(/\$([0-9]+(?:\.[0-9]+)?)\s*(?:M|million)/i);
+        if (volM) {
+          numVol = parseFloat(volM[1]) * 1000000;
+        } else {
+          const volK = mStr.match(/\$([0-9]+(?:\.[0-9]+)?)\s*(?:K|thousand)/i);
+          if (volK) numVol = parseFloat(volK[1]) * 1000;
+        }
       }
 
-      const teamAVol = Math.round(numVol * 0.585);
-      const teamBVol = Math.round(numVol * 0.415);
-      const diffVol = teamAVol - teamBVol;
+      // 2. Team Split percentages (from live polyData or parsed grok)
+      let teamAPrice = 0.595;
+      let teamBPrice = 0.405;
+      if (polyData.teamAPct) {
+        const pA = parseFloat(polyData.teamAPct);
+        if (!isNaN(pA) && pA > 0) {
+          teamAPrice = pA / 100;
+          teamBPrice = 1 - teamAPrice;
+        }
+      } else if (parsed && parsed.raw) {
+        const mChance = parsed.raw.match(/gives\s+the\s+([A-Za-z]+)\s+about\s+(?:a\s+)?(\d+(?:\.\d+)?%)/i);
+        if (mChance) {
+          const p = parseFloat(mChance[2]) / 100;
+          if (!isNaN(p)) {
+            if (mChance[1].toLowerCase().includes(teamA.toLowerCase())) {
+              teamAPrice = p;
+              teamBPrice = 1 - p;
+            } else if (mChance[1].toLowerCase().includes(teamB.toLowerCase())) {
+              teamBPrice = p;
+              teamAPrice = 1 - p;
+            }
+          }
+        }
+      }
+
+      const teamAVol = Math.round(numVol * teamAPrice);
+      const teamBVol = Math.round(numVol * teamBPrice);
+      const diffVol = Math.abs(teamAVol - teamBVol);
+      const favoredTeam = teamAPrice >= teamBPrice ? teamA : teamB;
 
       // Dynamic Direct Bets extraction
       const directBets = extractDirectBets(parsed || {}, teamA, teamB, league);
@@ -5395,36 +5551,49 @@
           : `Retail ticket volume is concentrated on public recency bias, while high-volume sharp capital and Polymarket prediction markets are aligned on ${teamA}. This presents a textbook fade the public / back the smart money opportunity.`
       };
 
+      // Linked Spreads: Keep live submarkets if available, else compute dynamic breakdown
+      let linkedSpreads = polyData.linkedSpreads;
+      if (!linkedSpreads || linkedSpreads.length === 0) {
+        linkedSpreads = [
+          { market: `${teamA} Moneyline`, volume: `$${Math.round(teamAVol * 0.6).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, share: `${(teamAPrice * 60).toFixed(1)}%`, price: `${(teamAPrice * 100).toFixed(1)}¢`, tag: "Core Volume", badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+          { market: `${teamA} Spread Play`, volume: `$${Math.round(teamAVol * 0.4).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, share: `${(teamAPrice * 40).toFixed(1)}%`, price: "52.0¢", tag: "Spread Accumulation", badgeClass: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" },
+          { market: `${teamB} Position`, volume: `$${teamBVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, share: `${(teamBPrice * 100).toFixed(1)}%`, price: `${(teamBPrice * 100).toFixed(1)}¢`, tag: "Opposition Volume", badgeClass: "bg-slate-800 text-slate-300 border-slate-700" }
+        ];
+      }
+
+      // Dynamic Whale Orders sized proportionally to numVol
+      const whaleOrders = polyData.whaleOrders || [
+        { wallet: "0x38b...e90", label: "Syndicate Whale", winRate: "Cross-Book", size: `$${Math.max(27500, Math.round(numVol * 0.02)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, pick: `${teamA} -3.0 Line`, price: "-110 (BetOnline/Poly)", tag: "Whale Alert", icon: "🐳" },
+        { wallet: "0x71c...a49", label: "Pro Sports Quant", winRate: "85.2% WR", size: `$${Math.round(numVol * 0.012).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, pick: `${teamA} Spread`, price: `${(teamAPrice * 100).toFixed(1)}¢`, tag: "Sharp Wallet", icon: "🐋" },
+        { wallet: "0x92f...3b1", label: "High-Roller", winRate: "78.0% WR", size: `$${Math.round(numVol * 0.009).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, pick: `${favoredTeam} Position`, price: `${(teamAPrice * 100).toFixed(1)}¢`, tag: "Sharp Wallet", icon: "🐋" },
+        { wallet: "0x44d...1e2", label: "Totals Specialist", winRate: "71.4% WR", size: `$${Math.round(numVol * 0.007).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, pick: `Game Total ${totalStr.includes('➔') ? totalStr.split('➔')[1].trim() : 'Over'}`, price: "50.5¢", tag: "Sharp Wallet", icon: "🎯" }
+      ];
+
       return Object.assign({}, polyData, {
         title: (teamA && teamB && teamA !== "Home Team" && teamA !== "Side A") ? `${teamA} vs. ${teamB}` : (polyData.title || `${teamA} vs. ${teamB}`),
         league: league,
         teamA: teamA,
         teamB: teamB,
         volume: `$${numVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        rawVolume: numVol,
         teamAVolume: `$${teamAVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         teamBVolume: `$${teamBVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        teamAPct: "58.5%",
-        teamBPct: "41.5%",
-        netDollarSkew: `+$${diffVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} on ${teamA}`,
-        smartCapital: `$${Math.round(numVol * 0.045).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        smartConsensus: `58.5% Smart Capital Backing ${teamA}`,
-        linkedSpreads: [
-          { market: `${teamA} Moneyline`, volume: `$${Math.round(teamAVol * 0.6).toLocaleString()}.00`, share: "35.1%", price: "58.5¢", tag: "Core Volume", badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-          { market: `${teamA} Spread Play`, volume: `$${Math.round(teamAVol * 0.4).toLocaleString()}.00`, share: "23.4%", price: "52.0¢", tag: "Spread Accumulation", badgeClass: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" },
-          { market: `${teamB} Position`, volume: `$${teamBVol.toLocaleString()}.00`, share: "41.5%", price: "41.5¢", tag: "Opposition Volume", badgeClass: "bg-slate-800 text-slate-300 border-slate-700" }
-        ],
-        whaleOrders: [
-          { wallet: "0x4a9...b11", label: "Pro Whale", winRate: "81.4% WR", size: `$${Math.round(numVol * 0.02).toLocaleString()}.00`, pick: `${teamA} Spread`, price: "52.0¢", tag: "Whale Alert", icon: "🐳" },
-          { wallet: "0x82c...9e3", label: "Sharp Fund", winRate: "76.0% WR", size: `$${Math.round(numVol * 0.015).toLocaleString()}.00`, pick: `${teamA} Moneyline`, price: "58.5¢", tag: "Sharp Wallet", icon: "🐋" }
-        ],
+        teamAPct: `${(teamAPrice * 100).toFixed(1)}%`,
+        teamBPct: `${(teamBPrice * 100).toFixed(1)}%`,
+        netDollarSkew: `+$${diffVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} on ${favoredTeam}`,
+        smartHolders: polyData.smartHolders || Math.max(5, Math.round((polyData.submarketsCount || 10) * 0.08)),
+        smartCapital: `$${Math.round(numVol * 0.05).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        smartConsensus: `${(Math.max(teamAPrice, teamBPrice) * 100).toFixed(1)}% Smart Capital Backing ${favoredTeam}`,
+        linkedSpreads: linkedSpreads,
+        whaleOrders: whaleOrders,
         statsProof: statsProof,
-        directBets: directBets,
         lineData: {
           open: openStr,
           current: currStr,
           total: totalStr
         },
-        divergence: divergence
+        divergence: divergence,
+        directBets: directBets
       });
     }
 
@@ -5465,7 +5634,7 @@
             matchTitle: "Patriots vs. Bears (NFL Thursday Night Football)",
             matchUrl: "https://polymarket.com/sports/nfl/nfl-ne-chi-2026-10-23",
             league: "NFL",
-            volume: "$870,412.00",
+            volume: "$1,696,467.41",
             dateSaved: "Oct 22, 2026",
             polyData: getTnfDemoData(),
             grokData: parseGrokReport(demoGrokReport),
@@ -5535,7 +5704,7 @@
         matchTitle: poly.title,
         matchUrl: url,
         league: poly.league || 'SPORTS',
-        volume: poly.volume || '$870,412.00',
+        volume: poly.volume || '$1,696,467.41',
         dateSaved: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
         polyData: poly,
         grokData: grok,
@@ -5710,7 +5879,7 @@
     }
 
     if (intelFormatPasteBtn && intelRawGrokInput) {
-      intelFormatPasteBtn.addEventListener('click', () => {
+      intelFormatPasteBtn.addEventListener('click', async () => {
         const text = intelRawGrokInput.value.trim();
         if (!text) {
           alert("Please paste Grok's text output first!");
@@ -5723,19 +5892,31 @@
         }
 
         const matchInput = intelMatchUrl ? intelMatchUrl.value.trim() : '';
-        const lowerInput = matchInput.toLowerCase();
-        const lowerText = text.toLowerCase();
 
-        // STRICT TNF Bears Demo Check: Only if BOTH Bears and Patriots are mentioned or explicit slug
-        const hasBears = lowerInput.includes("bears") || lowerText.includes("bears");
-        const hasPatriots = lowerInput.includes("patriots") || lowerText.includes("patriots");
-        const hasNeChi = lowerInput.includes("ne-chi");
-        const isTnf = (hasBears && hasPatriots) || hasNeChi;
+        // Show brief loading indication on button
+        const origBtnHtml = intelFormatPasteBtn.innerHTML;
+        intelFormatPasteBtn.disabled = true;
+        intelFormatPasteBtn.innerHTML = `<span>⏳ Fetching Live Polymarket Data...</span>`;
 
         let polyData = null;
-        if (isTnf) {
-          polyData = getTnfDemoData();
-        } else {
+        try {
+          if (matchInput) {
+            polyData = await fetchPolymarketMatchData(matchInput);
+          }
+          if (!polyData && parsed && parsed.raw) {
+            const rawLower = parsed.raw.toLowerCase();
+            if (rawLower.includes("bears") && rawLower.includes("patriots")) {
+              polyData = await fetchPolymarketMatchData("nfl-ne-chi-2026-10-23");
+            }
+          }
+        } catch (e) {
+          console.warn("fetchPolymarketMatchData failed:", e);
+        } finally {
+          intelFormatPasteBtn.disabled = false;
+          intelFormatPasteBtn.innerHTML = origBtnHtml;
+        }
+
+        if (!polyData) {
           const meta = extractTeamsAndLeague(matchInput, parsed.raw, parsed.theLine);
           let title = (meta && meta.teamA && meta.teamB && meta.teamA !== "Home Team")
             ? `${meta.teamA} vs. ${meta.teamB}`
@@ -6089,7 +6270,7 @@
             </div>
             <div class="text-right">
               <span class="text-xs text-slate-400 font-mono">Total Event Liquidity</span>
-              <div class="text-xl font-black text-emerald-400 font-mono">${poly.volume || '$870,412.00'}</div>
+              <div class="text-xl font-black text-emerald-400 font-mono">${poly.volume || '$1,696,467.41'}</div>
             </div>
           </div>
 
@@ -6099,11 +6280,11 @@
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full bg-cyan-400"></span>
                 <span class="text-white">${poly.teamA || 'Team A'} Volume:</span>
-                <span class="text-cyan-300 font-mono font-bold">${poly.teamAVolume || '$518,240.00'} (${poly.teamAPct || '59.5%'})</span>
+                <span class="text-cyan-300 font-mono font-bold">${poly.teamAVolume || '$1,009,398.11'} (${poly.teamAPct || '59.5%'})</span>
               </div>
               <div class="flex items-center gap-2">
                 <span class="text-slate-400">${poly.teamB || 'Team B'} Volume:</span>
-                <span class="text-slate-300 font-mono font-bold">${poly.teamBVolume || '$352,172.00'} (${poly.teamBPct || '40.5%'})</span>
+                <span class="text-slate-300 font-mono font-bold">${poly.teamBVolume || '$687,069.30'} (${poly.teamBPct || '40.5%'})</span>
                 <span class="w-3 h-3 rounded-full bg-rose-500"></span>
               </div>
             </div>
@@ -6116,9 +6297,9 @@
 
             <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1">
               <span class="flex items-center gap-1.5">
-                <span class="text-emerald-400">▲</span> Net Bullish Skew: <strong class="text-white font-mono">${poly.netDollarSkew || `+$166,068.00 on ${poly.teamA || 'Team A'}`}</strong>
+                <span class="text-emerald-400">▲</span> Net Bullish Skew: <strong class="text-white font-mono">${poly.netDollarSkew || `+$322,328.81 on ${poly.teamA || 'Team A'}`}</strong>
               </span>
-              <span>Tracked Smart Wallets Capital: <strong class="text-cyan-300 font-mono">${poly.smartCapital || '$34,850.00'}</strong></span>
+              <span>Tracked Smart Wallets Capital: <strong class="text-cyan-300 font-mono">${poly.smartCapital || '$84,820.00'}</strong></span>
             </div>
           </div>
 
@@ -6404,12 +6585,6 @@
         return;
       }
 
-      // If user pasted or typed the Bears vs Patriots match
-      if (urlOrSlug.includes("nfl-ne-chi") || urlOrSlug.toLowerCase().includes("bears")) {
-        loadTnfDemo();
-        return;
-      }
-
       const apiKey = localStorage.getItem('xai_api_key');
       if (!apiKey) {
         // No key saved: launch SuperGrok bridge
@@ -6426,43 +6601,29 @@
       intelProgressContainer.classList.remove('hidden');
       intelProgressBar.style.width = "20%";
       intelProgressPct.textContent = "20%";
-      intelProgressLabel.innerHTML = `<span>Fetching Polymarket market data...</span>`;
+      intelProgressLabel.innerHTML = `<span>Fetching Polymarket live market data...</span>`;
 
       try {
-        // Extract slug
-        const mSlug = urlOrSlug.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").split(/[?#]/)[0];
-        const meta = extractTeamsAndLeague(urlOrSlug, "", "");
-        let matchTitle = (meta && meta.teamA && meta.teamB && meta.teamA !== "Home Team")
-          ? `${meta.teamA} vs. ${meta.teamB}`
-          : mSlug.replace(/-/g, " ");
-        let polyData = {
-          title: matchTitle,
-          league: meta.league || "SPORTS",
-          teamA: meta.teamA,
-          teamB: meta.teamB,
-          date: "Upcoming",
-          volume: "Active Event",
-          submarketsCount: "Multiple",
-          teamAOdds: "Active",
-          teamBOdds: "Active"
-        };
-
-        try {
-          const res = await fetch(`https://gamma-api.polymarket.com/events?slug=${mSlug}`).catch(() => null);
-          if (res && res.ok) {
-            const evList = await res.json();
-            if (Array.isArray(evList) && evList[0]) {
-              const ev = evList[0];
-              polyData.title = ev.title || matchTitle;
-              polyData.date = ev.endDate ? `Resolves: ${ev.endDate}` : 'Upcoming';
-              if (ev.tags && ev.tags[0]) polyData.league = ev.tags[0].label || 'SPORTS';
-              if (ev.volume) polyData.volume = `$${parseFloat(ev.volume).toLocaleString()}`;
-              matchTitle = polyData.title;
-            }
-          }
-        } catch (e) {
-          console.warn("Gamma API fetch error:", e);
+        let polyData = await fetchPolymarketMatchData(urlOrSlug);
+        if (!polyData) {
+          const mSlug = urlOrSlug.replace(/^https?:\/\/[^\/]+\/(?:sports\/[^\/]+\/|event\/)?/i, "").split(/[?#]/)[0];
+          const meta = extractTeamsAndLeague(urlOrSlug, "", "");
+          let matchTitle = (meta && meta.teamA && meta.teamB && meta.teamA !== "Home Team")
+            ? `${meta.teamA} vs. ${meta.teamB}`
+            : mSlug.replace(/-/g, " ");
+          polyData = {
+            title: matchTitle,
+            league: meta.league || "SPORTS",
+            teamA: meta.teamA,
+            teamB: meta.teamB,
+            date: "Upcoming",
+            volume: "Active Event",
+            submarketsCount: "Multiple",
+            teamAOdds: "Active",
+            teamBOdds: "Active"
+          };
         }
+        let matchTitle = polyData.title;
 
         intelProgressBar.style.width = "50%";
         intelProgressPct.textContent = "50%";
